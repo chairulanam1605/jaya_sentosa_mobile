@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "839070297380",
+    "project_id": "jaya-sentosa-wifi-mobile",
+    "storage_bucket": "jaya-sentosa-wifi-mobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:839070297380:android:bc5d904b1735962cac17b1",
+        "android_client_info": {
+          "package_name": "com.example.jaya_sentosa_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkPAjNxX1_DgxVCrqopFKzbON0kvmIEdk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
