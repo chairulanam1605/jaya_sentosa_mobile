@@ -1,11 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'profile_detail_screen.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'tagihan_screen.dart';
 import 'payment_history_screen.dart';
 import '../utils/constants.dart';
+// PASTIKAN ANDA MENGIMPORT LAYAR PRIVACY POLICY YANG BARU DIBUAT
+import 'privacy_policy_screen.dart'; 
 
 class ProfileMenuScreen extends StatefulWidget {
   const ProfileMenuScreen({super.key});
@@ -15,14 +19,39 @@ class ProfileMenuScreen extends StatefulWidget {
 }
 
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
-  final user = AuthService.currentUser!;
+  File? _imageFile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedImage();
+  }
+
+  Future<void> _loadSavedImage() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? savedPath = prefs.getString('profile_image_path');
+
+    if (savedPath != null && savedPath.isNotEmpty) {
+      File img = File(savedPath);
+      if (await img.exists()) {
+        setState(() {
+          _imageFile = img;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadSavedImage();
+    setState(() {});
+    await Future.delayed(const Duration(seconds: 1));
+  }
 
   Future<void> _launchWhatsApp(BuildContext context) async {
     const String phoneNumber = "6285165863800";
     const String message =
         "Halo Admin Jaya Sentosa Group, saya pelanggan WiFi JSG. Saya butuh bantuan terkait layanan (kendala jaringan / ingin ubah paket).";
 
-    // Menggunakan skema url khusus aplikasi WhatsApp
     final Uri whatsappUrl = Uri.parse(
       "whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}",
     );
@@ -31,27 +60,20 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     );
 
     try {
-      // 1. Coba buka langsung via aplikasi WhatsApp
       bool launched = await launchUrl(
         whatsappUrl,
         mode: LaunchMode.externalApplication,
       );
-
-      // 2. Jika gagal (misal HP tidak pakai WA resmi), coba via link web wa.me
       if (!launched) {
         launched = await launchUrl(
           webUrl,
           mode: LaunchMode.externalApplication,
         );
       }
-
-      // 3. Jika keduanya gagal, baru tampilkan pesan error
       if (!launched && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Gagal membuka WhatsApp. Pastikan WhatsApp sudah terinstal di HP ini.',
-            ),
+            content: Text('Gagal membuka WhatsApp.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -60,9 +82,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Terjadi kesalahan. Pastikan WhatsApp sudah terinstal.',
-            ),
+            content: Text('Terjadi kesalahan.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -72,13 +92,19 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ========================================================
+    // LOGIKA CERDAS: Mengambil URL Foto dari Database Laravel
+    // ========================================================
+    final user = AuthService.currentUser;
+    final String? fotoUrl = user?.fotoProfile;
+    final String fullImageUrl = fotoUrl != null && fotoUrl.isNotEmpty
+        ? 'https://adminjsg.com/public/storage/profil/$fotoUrl'
+        : '';
+
     return Scaffold(
-      backgroundColor: const Color(
-        0xFFF8F9FA,
-      ), // Latar belakang abu-abu sangat muda
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        automaticallyImplyLeading:
-            false, // Menghilangkan ikon panah back di navbar utama
+        automaticallyImplyLeading: false,
         title: const Text(
           'Profil Saya',
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
@@ -88,149 +114,171 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              AuthService.logout();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
-              );
+            onPressed: () async {
+              await AuthService.logout();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
             },
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // --- HEADER SECTION ---
-            Container(
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E3A8A),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: const Color(0xFF1E3A8A),
+        backgroundColor: Colors.white,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E3A8A),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
+                  ),
+                ),
+                padding: const EdgeInsets.only(bottom: 40, top: 10),
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.white,
+                        backgroundImage: _imageFile != null
+                            ? FileImage(_imageFile!)
+                            : (fullImageUrl.isNotEmpty
+                                  ? NetworkImage(fullImageUrl) as ImageProvider
+                                  : null),
+                        child: _imageFile == null && fullImageUrl.isEmpty
+                            ? const Icon(
+                                Icons.person,
+                                size: 65,
+                                color: Color(0xFF1E3A8A),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Text(
+                      user?.fullName ?? 'Chairul Anam',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      user?.packageName ?? '20 Mbps',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              padding: const EdgeInsets.only(bottom: 40, top: 10),
-              child: Column(
-                children: [
-                  Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: const CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Colors.white,
-                          child: Icon(
-                            Icons.person,
-                            size: 65,
-                            color: Color(0xFF1E3A8A),
-                          ),
-                        ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Akun & Layanan",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black54,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  Text(
-                    user.fullName,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
-                  ),
-                  Text(
-                    user.packageName,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // --- MENU SECTION ---
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Akun & Layanan",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
-
-                  // Menu Detail Profile
-                  _buildMenuTile(
-                    icon: Icons.assignment_ind_rounded,
-                    title: "Detail Profil",
-                    subtitle: "Lihat informasi lengkap akun Anda",
-                    iconColor: const Color(0xFF1E3A8A),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProfileDetailScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Menu Bantuan (WhatsApp)
-                  _buildMenuTile(
-                    icon: Icons.help_outline_rounded,
-                    title: "Bantuan & Support",
-                    subtitle: "Hubungi admin Jaya Sentosa Group",
-                    iconColor: const Color(0xFF25D366),
-                    onTap: () => _launchWhatsApp(context),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Footer Version
-                  Center(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Jaya Sentosa Mobile',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black.withOpacity(0.3),
+                    const SizedBox(height: 15),
+                    _buildMenuTile(
+                      icon: Icons.assignment_ind_rounded,
+                      title: "Detail Profil",
+                      subtitle: "Lihat informasi lengkap akun Anda",
+                      iconColor: const Color(0xFF1E3A8A),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileDetailScreen(),
                           ),
-                        ),
-                        Text(
-                          'Versi ${Constants.version}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black.withOpacity(0.3),
-                          ),
-                        ),
-                      ],
+                        );
+                        _loadSavedImage();
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    _buildMenuTile(
+                      icon: Icons.help_outline_rounded,
+                      title: "Bantuan & Support",
+                      subtitle: "Hubungi admin Jaya Sentosa Group",
+                      iconColor: const Color(0xFF25D366),
+                      onTap: () => _launchWhatsApp(context),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ========================================================
+                    // FITUR BARU: Menu Kebijakan Privasi (Privacy Policy)
+                    // ========================================================
+                    _buildMenuTile(
+                      icon: Icons.security_rounded,
+                      title: "Kebijakan Privasi",
+                      subtitle: "Pelajari perlindungan data Anda",
+                      iconColor: Colors.blueGrey,
+                      onTap: () {
+                        // KODE YANG DIUBAH: Mengarahkan langsung ke halaman baru
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PrivacyPolicyScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 40),
+                    Center(
+                      child: Column(
+                        children: [
+                          Text(
+                            'Jaya Sentosa Mobile',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black.withOpacity(0.3),
+                            ),
+                          ),
+                          Text(
+                            'Versi ${Constants.version}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black.withOpacity(0.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -238,7 +286,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF1E3A8A),
         unselectedItemColor: Colors.grey,
-        currentIndex: 2, // Menandakan Tab Profil aktif
+        currentIndex: 2,
         onTap: (int index) {
           if (index == 0) {
             Navigator.pushReplacement(
@@ -255,7 +303,10 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
           }
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Tagihan'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long),
+            label: 'Tagihan',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
@@ -263,7 +314,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     );
   }
 
-  // Helper Widget untuk membuat list menu yang rapi
   Widget _buildMenuTile({
     required IconData icon,
     required String title,

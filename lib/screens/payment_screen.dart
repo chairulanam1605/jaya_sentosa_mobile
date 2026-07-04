@@ -1,7 +1,10 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../models/invoice_model.dart';
 import '../services/auth_service.dart';
 import 'payment_detail_screen.dart';
+import '../main.dart'; 
 
 class PaymentScreen extends StatefulWidget {
   final InvoiceModel? invoice;
@@ -28,9 +31,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
     if (widget.invoice != null) {
       _invoice = widget.invoice!;
     } else {
-      // Menghapus data dummy dan memberikan nilai default
       _invoice = InvoiceModel(id: '0', periode: 'Belum ada', jumlah: 0, status: 'unpaid');
     }
+
+    midtrans?.setTransactionFinishedCallback((result) {
+      final status = result.status; 
+
+      if (status == 'settlement' || status == 'capture') {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PaymentDetailScreen(
+                invoice: _invoice,
+                method: _selectedMethod,
+                transactionId: result.transactionId ?? 'TRX-${DateTime.now().millisecondsSinceEpoch}',
+              ),
+            ),
+          );
+        }
+      } else if (status == 'pending') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Menunggu konfirmasi pembayaran...')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pembayaran dibatalkan pengguna')),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    midtrans?.removeTransactionFinishedCallback();
+    super.dispose();
   }
 
   void _confirmPayment() async {
@@ -92,20 +127,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     if (confirm == true) {
       setState(() => _isProcessing = true);
-      await Future.delayed(const Duration(seconds: 2));
-      setState(() => _isProcessing = false);
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PaymentDetailScreen(
-              invoice: _invoice,
-              method: _selectedMethod,
-              transactionId: 'TRX-${DateTime.now().millisecondsSinceEpoch}',
-            ),
-          ),
+      try {
+        // AMBIL DATA USER YANG SEDANG LOGIN
+        final user = AuthService.currentUser!;
+        
+        // PENGAMAN MIDTRANS:
+        // Jika karena suatu alasan email di database masih error/kosong,
+        // kita paksa kasih email darurat agar kotak Midtrans tetap bisa terbuka!
+        String safeEmail = user.email.contains('@') ? user.email : 'pelanggan@jayasentosa.com';
+
+        final response = await http.post(
+          Uri.parse('https://adminjsg.com/api/checkout'), 
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            // SEKARANG KITA KIRIM DATA LENGKAP KE LARAVEL
+            'invoice_id': _invoice.id,
+            'harga_total': _invoice.jumlah,
+            'nama': user.fullName,
+            'email': safeEmail,
+            'phone': user.phone,
+          }),
         );
+
+        final data = jsonDecode(response.body);
+
+        if (response.statusCode == 200 && data['token'] != null) {
+          // CEK APAKAH MIDTRANS SUDAH SIAP DI HP
+          if (midtrans != null) {
+            midtrans?.startPaymentUiFlow(token: data['token']);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Sistem pembayaran belum siap, coba restart aplikasi')),
+            );
+          }
+        } else {
+          throw Exception(data['message'] ?? 'Gagal membuat transaksi ke server');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
       }
     }
   }
@@ -140,11 +208,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
+                    BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
                   ],
                 ),
                 child: Padding(
@@ -166,37 +230,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Total Bayar',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
-                          ),
-                          Text(
-                            _formatCurrency(_invoice.jumlah),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A8A),
-                            ),
-                          ),
+                          const Text('Total Bayar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                          Text(_formatCurrency(_invoice.jumlah), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
-              
               const SizedBox(height: 32),
-
-              const Text(
-                'Pilih Metode Pembayaran',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-              ),
+              const Text('Pilih Metode Pembayaran', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
               const SizedBox(height: 12),
-              
               ..._paymentMethods.map((method) => _buildPaymentOption(method)),
-
               const SizedBox(height: 40),
-
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -208,18 +254,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     elevation: _isProcessing ? 0 : 4,
-                    shadowColor: const Color(0xFF22C55E).withOpacity(0.4),
                   ),
                   child: _isProcessing
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
-                        )
-                      : const Text(
-                          'KONFIRMASI PEMBAYARAN',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-                        ),
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                      : const Text('KONFIRMASI PEMBAYARAN', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 ),
               ),
             ],
@@ -231,65 +269,36 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   Widget _buildPaymentOption(Map<String, dynamic> method) {
     final bool isSelected = _selectedMethod == method['name'];
-
     return GestureDetector(
-      onTap: () {
-        setState(() => _selectedMethod = method['name']);
-      },
+      onTap: () => setState(() => _selectedMethod = method['name']),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
-          border: Border.all(
-            color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey.shade200,
-            width: isSelected ? 2 : 1.5,
-          ),
+          border: Border.all(color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey.shade200, width: isSelected ? 2 : 1.5),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF1E3A8A) : const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                method['icon'],
-                color: isSelected ? Colors.white : const Color(0xFF64748B),
-                size: 24,
-              ),
+              decoration: BoxDecoration(color: isSelected ? const Color(0xFF1E3A8A) : const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
+              child: Icon(method['icon'], color: isSelected ? Colors.white : const Color(0xFF64748B), size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    method['name'],
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
+                  Text(method['name'], style: TextStyle(fontSize: 16, fontWeight: isSelected ? FontWeight.bold : FontWeight.w600, color: Colors.black87)),
                   const SizedBox(height: 4),
-                  Text(
-                    method['desc'],
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
+                  Text(method['desc'], style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             ),
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey.shade400,
-            ),
+            Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked, color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey.shade400),
           ],
         ),
       ),
@@ -300,30 +309,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: isSmall ? 13 : 14,
-            color: Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: isSmall ? 13 : 15,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            color: color ?? Colors.black87,
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: isSmall ? 13 : 14, color: Colors.black54, fontWeight: FontWeight.w500)),
+        Text(value, style: TextStyle(fontSize: isSmall ? 13 : 15, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? Colors.black87)),
       ],
     );
   }
 
   String _formatCurrency(double amount) {
     String result = amount.toStringAsFixed(0);
-    result = result.replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+    result = result.replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
     return 'Rp $result';
   }
 }

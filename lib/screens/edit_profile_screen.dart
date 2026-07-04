@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart'; // Import ApiService
+import '../models/user_model.dart'; // Import UserModel
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -12,14 +14,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
+  bool _isLoading = false; // Tambahan untuk indikator loading
 
   @override
   void initState() {
     super.initState();
     final user = AuthService.currentUser!;
+    // Mengubah isi form menjadi kosong jika datanya masih null/strip dari database
     _nameController = TextEditingController(text: user.fullName);
-    _phoneController = TextEditingController(text: user.phone);
-    _emailController = TextEditingController(text: user.email);
+    _phoneController = TextEditingController(text: user.phone == '-' ? '' : user.phone);
+    _emailController = TextEditingController(text: user.email == 'Belum ada email' ? '' : user.email);
   }
 
   @override
@@ -30,32 +34,86 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  void _saveChanges() {
+  // ---> FUNGSI SIMPAN YANG SUDAH TERHUBUNG KE DATABASE <---
+  Future<void> _saveChanges() async {
+    // Validasi form kosong
+    if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty || _phoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Semua kolom harus diisi!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     // Menghilangkan keyboard saat tombol simpan ditekan
     FocusScope.of(context).unfocus();
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Perubahan profil berhasil disimpan!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    Navigator.pop(context);
+    setState(() {
+      _isLoading = true; // Munculkan loading
+    });
+
+    try {
+      final user = AuthService.currentUser!;
+      
+      // Memanggil fungsi updateProfile dari ApiService
+      bool isSuccess = await ApiService.updateProfile(
+        user.customerNumber, // Mengirim NIK untuk mencari data di database
+        _nameController.text.trim(),
+        _emailController.text.trim(),
+        _phoneController.text.trim(),
+      );
+
+      if (isSuccess) {
+        // Memperbarui data AuthService.currentUser agar halaman profil langsung berubah tanpa perlu login ulang
+        AuthService.currentUser = UserModel(
+          id: user.id,
+          fullName: _nameController.text.trim(),
+          packageName: user.packageName,
+          phone: _phoneController.text.trim(),
+          email: _emailController.text.trim(), // Email baru berhasil ditanam
+          customerNumber: user.customerNumber,
+          since: user.since,
+          masaAktif: user.masaAktif,
+          fotoProfile: user.fotoProfile,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Perubahan profil berhasil disimpan ke database!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          Navigator.pop(context); // Kembali ke halaman sebelumnya
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false; // Matikan loading
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Latar belakang abu-abu terang
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text(
           'Ubah Profil',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
         ),
         backgroundColor: const Color(0xFF1E3A8A),
         elevation: 0,
@@ -67,27 +125,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- HEADER TEXT ---
               const Text(
                 'Perbarui Data Anda',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
               ),
               const SizedBox(height: 8),
               const Text(
-                'Pastikan data profil Anda selalu up-to-date untuk memudahkan komunikasi layanan WiFi.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.black54,
-                  height: 1.5,
-                ),
+                'Pastikan data profil Anda (terutama Email) valid untuk proses pembayaran layanan WiFi.',
+                style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
               ),
               const SizedBox(height: 32),
 
-              // --- FORM INPUT ---
               _buildTextField(
                 controller: _nameController,
                 label: 'Nama Lengkap',
@@ -108,36 +156,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _buildTextField(
                 controller: _emailController,
                 label: 'Alamat Email',
-                hint: 'Masukkan email aktif',
+                hint: 'contoh: nama@gmail.com', // Hint diperjelas
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
               
               const SizedBox(height: 40),
 
-              // --- TOMBOL SIMPAN ---
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _saveChanges,
+                  onPressed: _isLoading ? null : _saveChanges, // Nonaktifkan jika sedang proses
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E3A8A),
-                    foregroundColor: Colors.white, // Memastikan teks tombol berwarna putih
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
                     elevation: 3,
-                    shadowColor: const Color(0xFF1E3A8A).withOpacity(0.5),
                   ),
-                  child: const Text(
-                    'SIMPAN PERUBAHAN',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
+                  child: _isLoading 
+                    ? const SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      )
+                    : const Text(
+                        'SIMPAN PERUBAHAN',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                      ),
                 ),
               ),
             ],
@@ -147,7 +195,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // Helper Widget untuk membuat form input yang rapi dan konsisten
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -158,14 +205,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -176,16 +216,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
             prefixIcon: Icon(icon, color: const Color(0xFF1E3A8A), size: 22),
             filled: true,
-            fillColor: Colors.white, // Latar form putih bersih
+            fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            
-            // Border saat tidak diklik
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
             ),
-            
-            // Border saat form sedang diketik (Fokus)
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),

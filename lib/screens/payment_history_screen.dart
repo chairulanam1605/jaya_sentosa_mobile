@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:jaya_sentosa_mobile/services/api_service.dart'; // Sesuaikan path ini
-import 'package:jaya_sentosa_mobile/models/invoice_model.dart'; // Sesuaikan path ini
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jaya_sentosa_mobile/services/api_service.dart';
+import 'package:jaya_sentosa_mobile/models/invoice_model.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'tagihan_screen.dart'; 
+import 'profile_menu_screen.dart'; 
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -11,38 +14,44 @@ class PaymentHistoryScreen extends StatefulWidget {
 }
 
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
-  final int _currentIndex = 1; // Index 1 untuk Riwayat
-  final ScrollController _scrollController = ScrollController();
-  bool _isHelpExpanded = false;
-  bool _isHelpHidden = false;
+  final int _currentIndex = 1; // Index 1 untuk halaman Riwayat
+  String currentUserId = ""; 
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels > 10) {
-        if (!_isHelpHidden) setState(() => _isHelpHidden = true);
-        if (_isHelpExpanded) setState(() => _isHelpExpanded = false);
-      } else {
-        if (_isHelpHidden) setState(() => _isHelpHidden = false);
-      }
+    _loadUserId(); 
+  }
+
+  Future<void> _loadUserId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      currentUserId = prefs.getString('user_id') ?? ''; 
     });
+  }
+
+  Future<void> _refreshData() async {
+    await _loadUserId();
+    setState(() {});
+    await Future.delayed(const Duration(seconds: 1));
   }
 
   Future<void> _launchWhatsApp() async {
     final Uri url = Uri.parse(
         'whatsapp://send?phone=6285165863800&text=Halo%20Admin%20JSG,%20saya%20butuh%20bantuan%20terkait%20layanan%20WiFi.');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal.')),
+        );
+      }
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  String _formatCurrency(double amount) {
+    String result = amount.toStringAsFixed(0);
+    result = result.replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+    return 'Rp $result';
   }
 
   @override
@@ -54,20 +63,25 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         backgroundColor: const Color(0xFF1E3A8A),
         title: const Text('Riwayat Pembayaran', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16.0),
-            child: FutureBuilder<List<InvoiceModel>>(
-              future: ApiService.fetchPaidInvoices('1'), // Ganti '1' dengan ID user dinamis
+      
+      // HAPUS PENGGUNAAN STACK DAN KEMBALI MENGGUNAKAN SINGLECHILDSCROLLVIEW STANDAR
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: const Color(0xFF1E3A8A),
+        backgroundColor: Colors.white,
+        child: currentUserId.isEmpty 
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
+          : SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(), // WAJIB DITAMBAHKAN
+              padding: const EdgeInsets.all(16.0),
+              child: FutureBuilder<List<InvoiceModel>>(
+              future: ApiService.fetchPaidInvoices(currentUserId), 
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.only(top: 100.0),
-                      child: CircularProgressIndicator(color: Colors.green),
+                      child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
                     ),
                   );
                 } else if (snapshot.hasError) {
@@ -128,7 +142,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'Berhasil', // Bisa ditambah tanggal pembayaran dari API jika ada
+                                      'Berhasil', 
                                       style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                                     ),
                                   ],
@@ -138,7 +152,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
-                                    'Rp ${invoice.jumlah}',
+                                    _formatCurrency(invoice.jumlah), 
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E3A8A)),
                                   ),
                                   const SizedBox(height: 4),
@@ -165,57 +179,49 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
               },
             ),
           ),
-          // Floating Button Bantuan
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            bottom: 24,
-            right: _isHelpHidden ? -100 : (_isHelpExpanded ? 16 : -80),
-            child: GestureDetector(
-              onTap: () {
-                if (_isHelpExpanded) {
-                  _launchWhatsApp();
-                } else {
-                  setState(() => _isHelpExpanded = true);
-                  Future.delayed(const Duration(seconds: 4), () {
-                    if (mounted && _isHelpExpanded) setState(() => _isHelpExpanded = false);
-                  });
-                }
-              },
-              child: Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF25D366),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.help_outline_rounded, color: Colors.white, size: 28),
-                    if (_isHelpExpanded) ...[
-                      const SizedBox(width: 8),
-                      const Text('Bantuan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    ]
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        selectedItemColor: const Color(0xFF1E3A8A),
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          // Logika perpindahan halaman dengan pushReplacement
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Tagihan'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-        ],
+
+      // ---> INI TOMBOL BANTUAN YANG SAMA PERSIS DENGAN HALAMAN TAGIHAN <---
+      floatingActionButton: FloatingActionButton(
+        onPressed: _launchWhatsApp,
+        backgroundColor: const Color(0xFF25D366), 
+        elevation: 4,
+        shape: const CircleBorder(), 
+        child: const Icon(Icons.help_outline_rounded, color: Colors.white, size: 32),
+      ),
+
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5)),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF1E3A8A),
+          unselectedItemColor: Colors.grey.shade400,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          elevation: 0,
+          onTap: (index) {
+            if (index == 0) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const TagihanScreen()),
+              );
+            } else if (index == 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileMenuScreen()), 
+              );
+            }
+          },
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Tagihan'),
+            BottomNavigationBarItem(icon: Icon(Icons.history_rounded), label: 'Riwayat'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profil'),
+          ],
+        ),
       ),
     );
   }

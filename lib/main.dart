@@ -1,47 +1,74 @@
 import 'package:flutter/material.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'screens/splash_screen.dart'; // Import bawaan Mas Anam tetap aman
+import 'screens/splash_screen.dart'; 
 
-// 1. FUNGSI PENANGKAP NOTIFIKASI BACKGROUND
-// PENTING: Fungsi ini HARUS berada di luar class mana pun (paling luar / sejajar dengan import)
+// Fungsi penangkap notifikasi saat aplikasi berjalan di background/ditutup
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Inisialisasi Firebase agar bisa berjalan walau aplikasi ditutup
   await Firebase.initializeApp();
   print("Notifikasi Masuk (Background): ${message.notification?.title}");
 }
 
-// 2. FUNGSI MAIN DIUBAH MENJADI ASYNC
+MidtransSDK? midtrans;
+
 void main() async {
-  // Memastikan fondasi Flutter sudah siap sebelum memuat Firebase
+  // Memastikan fondasi Flutter siap
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Menyalakan mesin Firebase
-  await Firebase.initializeApp();
+  // 1. BLOK FIREBASE (Dibungkus Try-Catch agar aman)
+  try {
+    // Menjalankan inisialisasi Firebase
+    await Firebase.initializeApp();
+    
+    // Mendaftarkan fungsi background handler
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    
+    // Meminta izin kepada pengguna untuk menampilkan notifikasi (Wajib untuk Android 13+)
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    
+    print("============= FIREBASE SUKSES =============");
+  } catch (e) {
+    print("============= ERROR FIREBASE =============");
+    print(e.toString());
+  }
 
-  // Meminta izin memunculkan notifikasi (Wajib untuk HP Android versi baru)
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-  await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+  // 2. BLOK MIDTRANS (Dibersihkan dan Diperbaiki)
+  try {
+    midtrans = await MidtransSDK.init(
+      config: MidtransConfig(
+        // PERBAIKAN 1: Ditambahkan 'SB-' untuk menandakan jalur Sandbox
+        clientKey: 'SB-Mid-client-Z1tHofBtAPP6XoDO', 
+        
+        // PERBAIKAN 2: Ditambahkan '/public/' agar tidak terkena error 301 Redirect
+        merchantBaseUrl: 'https://adminjsg.com/public/', 
+        
+        colorTheme: ColorTheme(
+          colorPrimary: const Color(0xFF1E3A8A), // Warna biru tema Jaya Sentosa
+          colorPrimaryDark: const Color(0xFF1E3A8A),
+          colorSecondary: const Color(0xFF1E3A8A),
+        ),
+      ),
+    );
 
-  // Mendaftarkan fungsi penangkap notifikasi background yang dibuat di atas
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // Pengaturan tambahan agar pelanggan langsung masuk ke pilihan pembayaran 
+    // tanpa perlu mengetik ulang nama dan email di layar Midtrans
 
-  // Mengambil KTP/Token HP
-  // Token ini ibarat "Nomor HP" agar sistem admin tahu harus kirim notif ke HP yang mana
-  String? token = await messaging.getToken();
-  print("============= TOKEN FIREBASE HP INI =============");
-  print(token);
-  print("=================================================");
+    print("============= MIDTRANS SUKSES =============");
+  } catch (e) {
+    print("============= ERROR MIDTRANS =============");
+    print(e.toString());
+  }
 
+  // 3. JALANKAN APLIKASI
   runApp(const MyApp());
 }
 
-// 3. CLASS MYAPP BAWAAN MAS ANAM (TIDAK ADA YANG DIUBAH)
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -50,7 +77,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Jaya Sentosa Mobile',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E3A8A)),
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),

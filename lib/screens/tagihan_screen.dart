@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:jaya_sentosa_mobile/services/api_service.dart'; // Sesuaikan path ini
-import 'package:jaya_sentosa_mobile/models/invoice_model.dart'; // Sesuaikan path ini
-// Import screen lain untuk navigasi bottom bar dan notifikasi
-// import 'payment_history_screen.dart';
-// import 'profile_menu_screen.dart';
-// import 'notification_screen.dart';
+import 'package:jaya_sentosa_mobile/services/api_service.dart';
+import 'package:jaya_sentosa_mobile/models/invoice_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:midtrans_sdk/midtrans_sdk.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+import 'profile_menu_screen.dart';
+import 'payment_history_screen.dart';
+import 'notification_screen.dart';
+import '../services/auth_service.dart';
 
 class TagihanScreen extends StatefulWidget {
   const TagihanScreen({super.key});
@@ -16,203 +22,631 @@ class TagihanScreen extends StatefulWidget {
 
 class _TagihanScreenState extends State<TagihanScreen> {
   final int _currentIndex = 0;
-  final ScrollController _scrollController = ScrollController();
-  bool _isHelpExpanded = false;
-  bool _isHelpHidden = false;
+  String currentUserId = "";
+
+  // =========================================================
+  // PERBAIKAN 1: Variabel penampung status titik merah
+  // =========================================================
+  bool _hasUnreadNotif = false;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels > 10) {
-        if (!_isHelpHidden) setState(() => _isHelpHidden = true);
-        if (_isHelpExpanded) setState(() => _isHelpExpanded = false);
-      } else {
-        if (_isHelpHidden) setState(() => _isHelpHidden = false);
-      }
+    _loadUserId();
+  }
+
+  Future<void> _loadUserId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      currentUserId = prefs.getString('user_id') ?? '';
     });
+
+    if (currentUserId.isNotEmpty) {
+      _checkUnreadNotifications(); // Cek status titik merah saat layar dimuat
+
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        ApiService.updateFcmToken(currentUserId, token);
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    await _loadUserId();
+    setState(() {});
+    await Future.delayed(const Duration(seconds: 1));
+  }
+
+  // =========================================================
+  // PERBAIKAN 2: Fungsi mengecek apakah ada notif yang belum dibaca
+  // =========================================================
+  Future<void> _checkUnreadNotifications() async {
+    try {
+      final notifs = await ApiService.fetchNotifikasi(currentUserId);
+      // Mengecek apakah ada satupun notifikasi yang is_read nya 0 atau false
+      bool unreadExists = notifs.any(
+        (notif) => notif['is_read'] == 0 || notif['is_read'] == false,
+      );
+
+      if (mounted) {
+        setState(() {
+          _hasUnreadNotif = unreadExists; // Update status titik merah
+        });
+      }
+    } catch (e) {
+      print("Gagal mengecek notifikasi: $e");
+    }
+  }
+
+  // =========================================================
+  // PERBAIKAN 3: Fungsi ajaib pembuat titik pada nominal Rupiah
+  // =========================================================
+  String _formatRupiah(double amount) {
+    return 'Rp ${amount.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
   }
 
   Future<void> _launchWhatsApp() async {
     final Uri url = Uri.parse(
-        'whatsapp://send?phone=6285165863800&text=Halo%20Admin%20JSG,%20saya%20butuh%20bantuan%20terkait%20layanan%20WiFi.');
+      'whatsapp://send?phone=6285165863800&text=Halo%20Admin%20JSG,%20saya%20butuh%20bantuan%20terkait%20layanan%20WiFi.',
+    );
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal.')),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Gagal membuka WhatsApp. Pastikan aplikasi terinstal.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatDateIndonesia(DateTime date) {
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Future<void> _prosesPembayaranKeMidtrans(InvoiceModel invoice) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+    );
+
+    final url = Uri.parse('https://adminjsg.com/public/api/checkout');
+    final user = AuthService.currentUser;
+
+    final dataBody = {
+      'harga_total': invoice.jumlah.toInt().toString(),
+      'nama': user?.fullName ?? 'Pelanggan JSG',
+      'email':
+          '${(user?.fullName ?? 'pelanggan').toLowerCase().replaceAll(' ', '')}@gmail.com',
+      'phone': user?.phone ?? '080000000000',
+      'invoice_id': invoice.id.toString(),
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Accept': 'application/json'},
+        body: dataBody,
       );
+
+      if (mounted) Navigator.pop(context);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        final String snapToken = responseData['token'];
+
+        MidtransSDK? midtransLokal = await MidtransSDK.init(
+          config: MidtransConfig(
+            clientKey: 'SB-Mid-client-Z1tHofBtAPP6XoDO',
+            merchantBaseUrl: 'https://adminjsg.com/public/',
+            colorTheme: ColorTheme(
+              colorPrimary: const Color(0xFF1E3A8A),
+              colorPrimaryDark: const Color(0xFF1E3A8A),
+              colorSecondary: const Color(0xFF1E3A8A),
+            ),
+          ),
+        );
+        midtransLokal.startPaymentUiFlow(token: snapToken);
+      } else {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text("Ditolak Server (${response.statusCode})"),
+              content: Text(response.body),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("OK"),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Error Jaringan/Sistem"),
+            content: Text(e.toString()),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final user = AuthService.currentUser;
+
+    int sisaHari = 0;
+    if (user != null) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final activeDate = DateTime(
+        user.masaAktif.year,
+        user.masaAktif.month,
+        user.masaAktif.day,
+      );
+      sisaHari = activeDate.difference(today).inDays;
+    }
+
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF1E3A8A),
-        title: const Text('Tagihan WiFi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Jaya Sentosa Mobile',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications, color: Colors.white),
-                onPressed: () {
-                  // Navigator.push(context, MaterialPageRoute(builder: (context) => const NotificationScreen()));
+                icon: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                onPressed: () async {
+                  // Await agar sistem menunggu sampai pengguna menutup layar notifikasi
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationScreen(),
+                    ),
+                  );
+                  // Refresh ulang titik merahnya saat pengguna kembali ke beranda!
+                  _checkUnreadNotifications();
                 },
               ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+              // Titik merah HANYA muncul jika ada notif yang belum dibaca
+              if (_hasUnreadNotif)
+                Positioned(
+                  top: 14,
+                  right: 14,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade400,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF1E3A8A),
+                        width: 1.5,
+                      ),
+                    ),
                   ),
                 ),
-              )
             ],
-          )
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16.0),
-            child: FutureBuilder<List<InvoiceModel>>(
-              future: ApiService.fetchUnpaidInvoices('1'), // Ganti '1' dengan ID user dinamis nantinya
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 50.0),
-                      child: CircularProgressIndicator(color: Colors.green),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: const Color(0xFF1E3A8A),
+        backgroundColor: Colors.white,
+        child: currentUserId.isEmpty
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
+              )
+            : SingleChildScrollView(
+                physics:
+                    const AlwaysScrollableScrollPhysics(), // WAJIB DITAMBAHKAN
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 24.0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Selamat datang,',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
-                  );
-                } else if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 50.0),
-                      child: Text('Gagal memuat data: ${snapshot.error}'),
+                    const SizedBox(height: 4),
+                    Text(
+                      user?.fullName ?? 'Pelanggan JSG',
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
                     ),
-                  );
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 50.0),
-                      child: Text('Hore! Semua tagihan bulan ini sudah lunas.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-                    ),
-                  );
-                }
+                    const SizedBox(height: 24),
 
-                final invoices = snapshot.data!;
-                return Column(
-                  children: invoices.map((invoice) {
-                    return Card(
-                      elevation: 4,
-                      shadowColor: Colors.black12,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Periode ${invoice.periode}', // Mengambil data dari API
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.08),
+                            spreadRadius: 2,
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                        border: Border.all(color: Colors.grey.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Paket Internet Aktif',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey.shade500,
                             ),
-                            const Divider(height: 24, thickness: 1),
-                            const Text('Total Tagihan', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Rp ${invoice.jumlah}', // Mengambil data dari API
-                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A)),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            user?.packageName ?? 'Paket WiFi JSG',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.black87,
                             ),
-                            const SizedBox(height: 20),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1E3A8A),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today_outlined,
+                                size: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Berlaku hingga: ${user != null ? _formatDateIndonesia(user.masaAktif) : "-"}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
                                 ),
-                                onPressed: () {
-                                  // Aksi bayar tagihan
-                                },
-                                child: const Text('BAYAR TAGIHAN SEKARANG', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 16,
+                                color: sisaHari < 0 ? Colors.red : Colors.green,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                sisaHari < 0
+                                    ? 'Telah lewat masa aktif: ${sisaHari.abs()} hari'
+                                    : 'Sisa masa aktif: $sisaHari hari lagi',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: sisaHari < 0
+                                      ? Colors.red
+                                      : Colors.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    const Text(
+                      'Tagihan Bulan Ini',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    FutureBuilder<List<InvoiceModel>>(
+                      future: ApiService.fetchUnpaidInvoices(currentUserId),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 30.0),
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF1E3A8A),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
-          ),
-          // Floating Button Bantuan
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            bottom: 24,
-            right: _isHelpHidden ? -100 : (_isHelpExpanded ? 16 : -80),
-            child: GestureDetector(
-              onTap: () {
-                if (_isHelpExpanded) {
-                  _launchWhatsApp();
-                } else {
-                  setState(() => _isHelpExpanded = true);
-                  Future.delayed(const Duration(seconds: 4), () {
-                    if (mounted && _isHelpExpanded) setState(() => _isHelpExpanded = false);
-                  });
-                }
-              },
-              child: Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF25D366),
-                  borderRadius: BorderRadius.circular(25),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4))],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.help_outline_rounded, color: Colors.white, size: 28),
-                    if (_isHelpExpanded) ...[
-                      const SizedBox(width: 8),
-                      const Text('Bantuan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    ]
+                          );
+                        } else if (snapshot.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 30.0),
+                              child: Text(
+                                'Gagal memuat data: ${snapshot.error}',
+                              ),
+                            ),
+                          );
+                        } else if (!snapshot.hasData ||
+                            snapshot.data!.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 40.0),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline,
+                                    size: 60,
+                                    color: Colors.green.shade300,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Hore! Semua tagihan Anda sudah lunas.',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        final invoices = snapshot.data!;
+                        return Column(
+                          children: invoices.map((invoice) {
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.08),
+                                    spreadRadius: 2,
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        invoice.periode,
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Belum Dibayar',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: 16.0,
+                                    ),
+                                    child: Divider(
+                                      height: 1,
+                                      color: Color(0xFFEEEEEE),
+                                    ),
+                                  ),
+
+                                  Text(
+                                    'Total Tagihan',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  // =========================================================
+                                  // MENGGUNAKAN FUNGSI FORMAT RUPIAH DI SINI
+                                  // =========================================================
+                                  Text(
+                                    _formatRupiah(invoice.jumlah),
+                                    style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF1E3A8A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(
+                                          0xFF1E3A8A,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            30,
+                                          ),
+                                        ),
+                                        elevation: 2,
+                                      ),
+                                      onPressed: () {
+                                        _prosesPembayaranKeMidtrans(invoice);
+                                      },
+                                      child: const Text(
+                                        'BAYAR TAGIHAN SEKARANG',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        selectedItemColor: const Color(0xFF1E3A8A),
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          // Logika perpindahan halaman dengan pushReplacement
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Tagihan'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-        ],
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: _launchWhatsApp,
+        backgroundColor: const Color(0xFF25D366),
+        elevation: 4,
+        shape: const CircleBorder(),
+        child: const Icon(
+          Icons.help_outline_rounded,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF1E3A8A),
+          unselectedItemColor: Colors.grey.shade400,
+          selectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+          elevation: 0,
+          onTap: (index) {
+            if (index == 1) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PaymentHistoryScreen(),
+                ),
+              );
+            } else if (index == 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfileMenuScreen(),
+                ),
+              );
+            }
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_filled),
+              label: 'Tagihan',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.history_rounded),
+              label: 'Riwayat',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              label: 'Profil',
+            ),
+          ],
+        ),
       ),
     );
   }
