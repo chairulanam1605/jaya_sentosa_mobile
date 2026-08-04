@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,9 +20,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   File? _imageFile;
   bool _isUploading = false;
 
-  // =========================================================
-  // VARIABEL CACHE UNTUK MENCEGAH LAYAR MERAH (NULL ERROR)
-  // =========================================================
   String _userName = 'Memuat...';
   String _userEmail = '-';
   String _userPhone = '-';
@@ -34,9 +33,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     _loadUserData();
   }
 
-  // =========================================================
-  // MENYIMPAN DAN MENARIK DATA PROFIL DARI MEMORI HP
-  // =========================================================
   Future<void> _loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     final user = AuthService.currentUser;
@@ -64,11 +60,55 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     });
 
     _loadSavedImage();
+    _fetchFreshProfile();
   }
 
+  // 🚀 FUNGSI BARU: Tarik Data Detail Secara Real-Time dari Server
+  Future<void> _fetchFreshProfile() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String userId = prefs.getString('user_id') ?? '';
+    if (userId.isEmpty) return;
+
+    try {
+      final url = Uri.parse('https://adminjsg.com/public/api/profil/$userId');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          final freshData = responseData['data'];
+          
+          String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
+          String freshEmail = freshData['email'] ?? _userEmail;
+          String freshPhone = freshData['phone'] ?? freshData['no_hp'] ?? _userPhone;
+          String freshFoto = freshData['foto_profil'] ?? freshData['foto'] ?? freshData['fotoProfile'] ?? '';
+
+          await prefs.setString('cache_fullName', freshName);
+          await prefs.setString('cache_email', freshEmail); 
+          await prefs.setString('cache_phone', freshPhone); 
+          await prefs.setString('cache_fotoProfile', freshFoto);
+          
+          if (mounted) {
+            setState(() {
+              _userName = freshName;
+              _userEmail = freshEmail;
+              _userPhone = freshPhone;
+              _fotoUrl = freshFoto;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print("Gagal mengambil profil detail terbaru: $e");
+    }
+  }
+
+  // 🚀 PERBAIKAN: Load Gambar Spesifik per Akun
   Future<void> _loadSavedImage() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? savedPath = prefs.getString('profile_image_path');
+    String userId = prefs.getString('user_id') ?? '';
+    
+    String? savedPath = prefs.getString('profile_image_path_$userId');
 
     if (savedPath != null && savedPath.isNotEmpty) {
       File img = File(savedPath);
@@ -77,13 +117,18 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           _imageFile = img;
         });
       }
+    } else {
+      setState(() {
+        _imageFile = null;
+      });
     }
   }
 
   Future<void> _refreshData() async {
+    await _fetchFreshProfile();
     await _loadUserData();
     setState(() {});
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   void _showImageSourceMenu() {
@@ -148,7 +193,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           });
 
           if (success) {
-            prefs.setString('profile_image_path', pickedFile.path);
+            // 🚀 PERBAIKAN: Simpan path dengan Key yang Spesifik
+            prefs.setString('profile_image_path_$userId', pickedFile.path);
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
@@ -168,8 +214,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🚀 SUDAH DIHAPUS: Final user = AuthService.currentUser! yang menyebabkan error layar merah
-
     final String fullImageUrl = _fotoUrl.isNotEmpty ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl' : '';
 
     return Scaffold(
@@ -233,7 +277,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  _userName, // 🚀 MENGAMBIL NAMA DARI CACHE
+                  _userName,
                   style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 const SizedBox(height: 4),
@@ -275,7 +319,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   child: OutlinedButton(
                     onPressed: () async {
                       await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-                      _loadUserData(); // 🚀 Refresh data sepulang dari halaman ubah profil
+                      _refreshData(); // 🚀 Refresh otomatis data terbaru sepulang dari Edit
                     },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF1E3A8A),

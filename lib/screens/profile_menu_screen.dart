@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert'; // Wajib untuk API
+import 'package:http/http.dart' as http; // Wajib untuk API
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,9 +22,7 @@ class ProfileMenuScreen extends StatefulWidget {
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   File? _imageFile;
 
-  // =========================================================
-  // VARIABEL CACHE PERMANEN
-  // =========================================================
+  // Variabel Cache Permanen
   String _userName = 'Memuat...';
   String _userPackage = 'Memuat...';
   String _fotoUrl = '';
@@ -33,21 +33,16 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     _loadUserData();
   }
 
-  // =========================================================
-  // FUNGSI MENGAMBIL DATA CACHE AGAR NAMA SESUAI AKUN
-  // =========================================================
   Future<void> _loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     final user = AuthService.currentUser;
 
-    // Jika data segar masih ada di RAM, amankan ke memori permanen
     if (user != null) {
       await prefs.setString('cache_fullName', user.fullName);
       await prefs.setString('cache_packageName', user.packageName);
       await prefs.setString('cache_fotoProfile', user.fotoProfile ?? '');
     }
 
-    // Terapkan ke layar dari memori permanen
     setState(() {
       _userName = prefs.getString('cache_fullName') ?? 'Pelanggan JSG';
       _userPackage = prefs.getString('cache_packageName') ?? 'Paket WiFi JSG';
@@ -55,11 +50,55 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     });
 
     _loadSavedImage();
+    _fetchFreshProfile(); // Otomatis cek update data saat layar dibuka
   }
 
+  // 🚀 FUNGSI BARU: Ambil Profil Terbaru secara Real-Time
+  Future<void> _fetchFreshProfile() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String userId = prefs.getString('user_id') ?? '';
+    if (userId.isEmpty) return;
+
+    try {
+      final url = Uri.parse('https://adminjsg.com/public/api/profil/$userId');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          final freshData = responseData['data'];
+          
+          String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
+          String freshPackage = freshData['package_name'] ?? freshData['nama_paket'] ?? freshData['paket'] ?? _userPackage;
+          
+          // Antisipasi nama kolom foto di database
+          String freshFoto = freshData['foto_profil'] ?? freshData['foto'] ?? freshData['fotoProfile'] ?? '';
+
+          await prefs.setString('cache_fullName', freshName);
+          await prefs.setString('cache_packageName', freshPackage); 
+          await prefs.setString('cache_fotoProfile', freshFoto);
+          
+          if (mounted) {
+            setState(() {
+              _userName = freshName;
+              _userPackage = freshPackage;
+              _fotoUrl = freshFoto;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print("Gagal mengambil profil terbaru: $e");
+    }
+  }
+
+  // 🚀 PERBAIKAN: Menggunakan Kunci Spesifik User ID
   Future<void> _loadSavedImage() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? savedPath = prefs.getString('profile_image_path');
+    String userId = prefs.getString('user_id') ?? '';
+    
+    // Kunci menjadi spesifik: profile_image_path_123
+    String? savedPath = prefs.getString('profile_image_path_$userId');
 
     if (savedPath != null && savedPath.isNotEmpty) {
       File img = File(savedPath);
@@ -68,13 +107,19 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
           _imageFile = img;
         });
       }
+    } else {
+      // Kosongkan _imageFile jika user ini memang belum pernah upload di HP ini
+      setState(() {
+        _imageFile = null;
+      });
     }
   }
 
   Future<void> _refreshData() async {
+    await _fetchFreshProfile();
     await _loadUserData();
     setState(() {});
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _launchWhatsApp(BuildContext context) async {
@@ -116,6 +161,10 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
               await AuthService.logout();
+              // Bersihkan data profil sementara saat logout agar bersih
+              SharedPreferences prefs = await SharedPreferences.getInstance();
+              await prefs.remove('user_id');
+              
               if (context.mounted) {
                 Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
               }
@@ -159,11 +208,11 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                     ),
                     const SizedBox(height: 15),
                     Text(
-                      _userName, // 🚀 MENGGUNAKAN NAMA DARI CACHE (Contoh: "Testing")
+                      _userName, 
                       style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     Text(
-                      _userPackage, // 🚀 MENGGUNAKAN PAKET DARI CACHE
+                      _userPackage, 
                       style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8)),
                     ),
                   ],
@@ -183,7 +232,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       iconColor: const Color(0xFF1E3A8A),
                       onTap: () async {
                         await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileDetailScreen()));
-                        _loadUserData(); // 🚀 Refresh data sepulang dari halaman detail
+                        _refreshData(); // Refresh segera setelah pulang dari Detail
                       },
                     ),
                     const SizedBox(height: 12),
