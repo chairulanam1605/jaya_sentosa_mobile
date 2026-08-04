@@ -63,7 +63,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     _fetchFreshProfile();
   }
 
-  // 🚀 FUNGSI BARU: Tarik Data Detail Secara Real-Time dari Server
   Future<void> _fetchFreshProfile() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId = prefs.getString('user_id') ?? '';
@@ -103,7 +102,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     }
   }
 
-  // 🚀 PERBAIKAN: Load Gambar Spesifik per Akun
   Future<void> _loadSavedImage() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId = prefs.getString('user_id') ?? '';
@@ -129,6 +127,69 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     await _loadUserData();
     setState(() {});
     await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  // 🚀 FUNGSI BARU: Menghapus Foto Profil
+  Future<void> _deleteProfilePicture() async {
+    // Tampilkan Dialog Konfirmasi
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Hapus Foto Profil', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text('Apakah Anda yakin ingin menghapus foto profil ini?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Jika pengguna menekan "Hapus"
+    if (confirm == true) {
+      setState(() {
+        _isUploading = true; // Pakai indikator loading sementara memproses
+      });
+
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String userId = prefs.getString('user_id') ?? '';
+
+      // Hapus data foto dari memori lokal (Cache)
+      if (userId.isNotEmpty) {
+        await prefs.remove('profile_image_path_$userId');
+      }
+      await prefs.setString('cache_fotoProfile', ''); 
+
+      // 💡 CATATAN: Jika di backend ada API untuk menghapus foto (misal ApiService.deleteProfilePicture),
+      // Anda bisa memanggilnya di sini. Untuk saat ini, kita bersihkan tampilannya di aplikasi.
+
+      if (mounted) {
+        setState(() {
+          _imageFile = null;
+          _fotoUrl = '';
+          _isUploading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto profil berhasil dihapus!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   void _showImageSourceMenu() {
@@ -161,6 +222,16 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                         _pickAndUploadImage(ImageSource.gallery);
                       },
                     ),
+                    // 🚀 TAMBAHAN: Tombol Hapus hanya muncul jika foto tidak kosong
+                    if (_imageFile != null || _fotoUrl.isNotEmpty)
+                      ListTile(
+                        leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                        title: const Text('Hapus Foto Profil', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          _deleteProfilePicture(); // Panggil fungsi hapus
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -193,7 +264,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           });
 
           if (success) {
-            // 🚀 PERBAIKAN: Simpan path dengan Key yang Spesifik
             prefs.setString('profile_image_path_$userId', pickedFile.path);
           }
 
@@ -319,7 +389,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   child: OutlinedButton(
                     onPressed: () async {
                       await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-                      _refreshData(); // 🚀 Refresh otomatis data terbaru sepulang dari Edit
+                      _refreshData(); 
                     },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF1E3A8A),
