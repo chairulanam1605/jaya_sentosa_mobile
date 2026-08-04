@@ -5,6 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// 🚀 DITAMBAHKAN UNTUK MENEMBAK API PROFIL
+import 'package:http/http.dart' as http; 
+import 'dart:convert'; 
+
 import 'profile_menu_screen.dart'; 
 import 'payment_history_screen.dart';
 import 'payment_screen.dart'; 
@@ -23,9 +27,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
   String currentUserId = ""; 
   bool _hasUnreadNotif = false; 
 
-  // =========================================================
-  // SOLUSI: Variabel Cache Permanen (Anti-Blank RAM)
-  // =========================================================
+  // Variabel Cache Permanen
   String _userName = 'Pelanggan JSG';
   String _userPackage = 'Paket WiFi JSG';
   String _userCustomerNumber = '-';
@@ -39,24 +41,27 @@ class _TagihanScreenState extends State<TagihanScreen> {
   }
 
   // =========================================================
-  // FUNGSI CERDAS: Menyimpan ke Cache & Membaca dari Cache
+  // 1. FUNGSI CERDAS: Menyimpan & Membaca dari Cache
   // =========================================================
   Future<void> _loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     
-    // 1. Jika RAM masih memiliki data segar (misal baru login), 
-    // amankan (backup) datanya ke memori permanen HP.
-    final user = AuthService.currentUser;
-    if (user != null) {
-      await prefs.setString('cache_fullName', user.fullName);
-      await prefs.setString('cache_packageName', user.packageName);
-      await prefs.setString('cache_customerNumber', user.customerNumber ?? '-');
-      await prefs.setString('cache_phone', user.phone);
-      await prefs.setString('cache_masaAktif', user.masaAktif.toIso8601String());
+    // Cek apakah data sudah ada di cache sebelumnya
+    String? cachedName = prefs.getString('cache_fullName');
+    
+    // Jika masih kosong (baru pertama kali login), amankan datanya dari Auth
+    if (cachedName == null) {
+      final user = AuthService.currentUser;
+      if (user != null) {
+        await prefs.setString('cache_fullName', user.fullName);
+        await prefs.setString('cache_packageName', user.packageName);
+        await prefs.setString('cache_customerNumber', user.customerNumber ?? '-');
+        await prefs.setString('cache_phone', user.phone);
+        await prefs.setString('cache_masaAktif', user.masaAktif.toIso8601String());
+      }
     }
     
-    // 2. Terapkan data dari memori permanen ke tampilan UI
-    // (Menjamin data selalu ada meski aplikasi sudah ditinggal lama)
+    // Terapkan data ke tampilan UI agar anti-blank
     setState(() {
       currentUserId = prefs.getString('user_id') ?? ''; 
       _userName = prefs.getString('cache_fullName') ?? 'Pelanggan JSG';
@@ -70,22 +75,58 @@ class _TagihanScreenState extends State<TagihanScreen> {
       }
     });
     
-    // 3. Proses notifikasi dan FCM Token
     if (currentUserId.isNotEmpty) {
       _checkUnreadNotifications(); 
-      
       String? token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        ApiService.updateFcmToken(currentUserId, token);
-      }
+      if (token != null) ApiService.updateFcmToken(currentUserId, token);
     }
   }
 
-  // Fungsi Refresh yang baru diusap layar ke bawah (Pull-to-Refresh)
+  // =========================================================
+  // 2. FUNGSI BARU: Ambil Profil Terbaru (Masa Aktif & Paket)
+  // =========================================================
+  Future<void> _fetchFreshProfile() async {
+    if (currentUserId.isEmpty) return;
+    
+    try {
+      final url = Uri.parse('https://adminjsg.com/public/api/profil/$currentUserId');
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['status'] == 'success') {
+          final freshData = responseData['data'];
+          
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          
+          // ⚠️ PENTING: Menangkap nama kolom dari database.
+          // Fallback ini (misal: 'package_name' ?? 'nama_paket' ?? 'paket') digunakan
+          // agar menyesuaikan dengan apapun nama kolom database milik temanmu.
+          String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
+          String freshPackage = freshData['package_name'] ?? freshData['nama_paket'] ?? freshData['paket'] ?? _userPackage;
+          String freshMasaAktif = freshData['masa_aktif'] ?? freshData['active_date'] ?? _userMasaAktif.toIso8601String();
+          
+          // Timpa memori hp secara permanen dengan data yang sudah di-acc admin
+          await prefs.setString('cache_fullName', freshName);
+          await prefs.setString('cache_packageName', freshPackage); 
+          await prefs.setString('cache_masaAktif', freshMasaAktif);
+        }
+      }
+    } catch (e) {
+      print("Gagal mengambil profil terbaru: $e");
+    }
+  }
+
+  // =========================================================
+  // 3. FUNGSI REFRESH YANG SUDAH DIPERBARUI
+  // =========================================================
   Future<void> _refreshData() async {
-    await _loadUserData(); // Memanggil ulang sistem cache
+    // Jalankan tembakan API profil terlebih dahulu
+    await _fetchFreshProfile(); 
+    // Setelah data terbaru tersimpan, panggil ulang layar
+    await _loadUserData();      
     setState(() {});
-    await Future.delayed(const Duration(seconds: 1));
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _checkUnreadNotifications() async {
@@ -104,10 +145,10 @@ class _TagihanScreenState extends State<TagihanScreen> {
   }
 
   String _formatRupiah(double amount) {
-    return 'Rp ' + amount.toInt().toString().replaceAllMapped(
+    return 'Rp ${amount.toInt().toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]}.',
-    );
+    )}';
   }
 
   Future<void> _launchWhatsApp() async {
@@ -129,7 +170,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Menghitung sisa hari menggunakan variabel cache
+    // Menghitung sisa hari menggunakan variabel cache yang otomatis ter-update
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final activeDate = DateTime(_userMasaAktif.year, _userMasaAktif.month, _userMasaAktif.day);
