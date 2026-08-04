@@ -8,7 +8,6 @@ import 'login_screen.dart';
 import 'tagihan_screen.dart';
 import 'payment_history_screen.dart';
 import '../utils/constants.dart';
-// PASTIKAN ANDA MENGIMPORT LAYAR PRIVACY POLICY YANG BARU DIBUAT
 import 'privacy_policy_screen.dart'; 
 
 class ProfileMenuScreen extends StatefulWidget {
@@ -21,9 +20,40 @@ class ProfileMenuScreen extends StatefulWidget {
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   File? _imageFile;
 
+  // =========================================================
+  // VARIABEL CACHE PERMANEN
+  // =========================================================
+  String _userName = 'Memuat...';
+  String _userPackage = 'Memuat...';
+  String _fotoUrl = '';
+
   @override
   void initState() {
     super.initState();
+    _loadUserData();
+  }
+
+  // =========================================================
+  // FUNGSI MENGAMBIL DATA CACHE AGAR NAMA SESUAI AKUN
+  // =========================================================
+  Future<void> _loadUserData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final user = AuthService.currentUser;
+
+    // Jika data segar masih ada di RAM, amankan ke memori permanen
+    if (user != null) {
+      await prefs.setString('cache_fullName', user.fullName);
+      await prefs.setString('cache_packageName', user.packageName);
+      await prefs.setString('cache_fotoProfile', user.fotoProfile ?? '');
+    }
+
+    // Terapkan ke layar dari memori permanen
+    setState(() {
+      _userName = prefs.getString('cache_fullName') ?? 'Pelanggan JSG';
+      _userPackage = prefs.getString('cache_packageName') ?? 'Paket WiFi JSG';
+      _fotoUrl = prefs.getString('cache_fotoProfile') ?? '';
+    });
+
     _loadSavedImage();
   }
 
@@ -42,7 +72,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   }
 
   Future<void> _refreshData() async {
-    await _loadSavedImage();
+    await _loadUserData();
     setState(() {});
     await Future.delayed(const Duration(seconds: 1));
   }
@@ -52,63 +82,33 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     const String message =
         "Halo Admin Jaya Sentosa Group, saya pelanggan WiFi JSG. Saya butuh bantuan terkait layanan (kendala jaringan / ingin ubah paket).";
 
-    final Uri whatsappUrl = Uri.parse(
-      "whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}",
-    );
-    final Uri webUrl = Uri.parse(
-      "https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}",
-    );
+    final Uri whatsappUrl = Uri.parse("whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}");
+    final Uri webUrl = Uri.parse("https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}");
 
     try {
-      bool launched = await launchUrl(
-        whatsappUrl,
-        mode: LaunchMode.externalApplication,
-      );
+      bool launched = await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
       if (!launched) {
-        launched = await launchUrl(
-          webUrl,
-          mode: LaunchMode.externalApplication,
-        );
+        launched = await launchUrl(webUrl, mode: LaunchMode.externalApplication);
       }
       if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal membuka WhatsApp.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal membuka WhatsApp.'), backgroundColor: Colors.red));
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Terjadi kesalahan.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Terjadi kesalahan.'), backgroundColor: Colors.red));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ========================================================
-    // LOGIKA CERDAS: Mengambil URL Foto dari Database Laravel
-    // ========================================================
-    final user = AuthService.currentUser;
-    final String? fotoUrl = user?.fotoProfile;
-    final String fullImageUrl = fotoUrl != null && fotoUrl.isNotEmpty
-        ? 'https://adminjsg.com/public/storage/profil/$fotoUrl'
-        : '';
+    final String fullImageUrl = _fotoUrl.isNotEmpty ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl' : '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text(
-          'Profil Saya',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-        ),
+        title: const Text('Profil Saya', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: const Color(0xFF1E3A8A),
         elevation: 0,
         actions: [
@@ -117,11 +117,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
             onPressed: () async {
               await AuthService.logout();
               if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
+                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
               }
             },
           ),
@@ -139,10 +135,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: Color(0xFF1E3A8A),
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(30),
-                    bottomRight: Radius.circular(30),
-                  ),
+                  borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
                 ),
                 padding: const EdgeInsets.only(bottom: 40, top: 10),
                 child: Column(
@@ -151,45 +144,27 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 10,
-                          ),
-                        ],
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
                       ),
                       child: CircleAvatar(
                         radius: 50,
                         backgroundColor: Colors.white,
                         backgroundImage: _imageFile != null
                             ? FileImage(_imageFile!)
-                            : (fullImageUrl.isNotEmpty
-                                  ? NetworkImage(fullImageUrl) as ImageProvider
-                                  : null),
+                            : (fullImageUrl.isNotEmpty ? NetworkImage(fullImageUrl) as ImageProvider : null),
                         child: _imageFile == null && fullImageUrl.isEmpty
-                            ? const Icon(
-                                Icons.person,
-                                size: 65,
-                                color: Color(0xFF1E3A8A),
-                              )
+                            ? const Icon(Icons.person, size: 65, color: Color(0xFF1E3A8A))
                             : null,
                       ),
                     ),
                     const SizedBox(height: 15),
                     Text(
-                      user?.fullName ?? 'Chairul Anam',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                      _userName, // 🚀 MENGGUNAKAN NAMA DARI CACHE (Contoh: "Testing")
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     Text(
-                      user?.packageName ?? '20 Mbps',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
+                      _userPackage, // 🚀 MENGGUNAKAN PAKET DARI CACHE
+                      style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8)),
                     ),
                   ],
                 ),
@@ -199,14 +174,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Akun & Layanan",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black54,
-                      ),
-                    ),
+                    const Text("Akun & Layanan", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
                     const SizedBox(height: 15),
                     _buildMenuTile(
                       icon: Icons.assignment_ind_rounded,
@@ -214,13 +182,8 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       subtitle: "Lihat informasi lengkap akun Anda",
                       iconColor: const Color(0xFF1E3A8A),
                       onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ProfileDetailScreen(),
-                          ),
-                        );
-                        _loadSavedImage();
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileDetailScreen()));
+                        _loadUserData(); // 🚀 Refresh data sepulang dari halaman detail
                       },
                     ),
                     const SizedBox(height: 12),
@@ -232,45 +195,21 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       onTap: () => _launchWhatsApp(context),
                     ),
                     const SizedBox(height: 12),
-
-                    // ========================================================
-                    // FITUR BARU: Menu Kebijakan Privasi (Privacy Policy)
-                    // ========================================================
                     _buildMenuTile(
                       icon: Icons.security_rounded,
                       title: "Kebijakan Privasi",
                       subtitle: "Pelajari perlindungan data Anda",
                       iconColor: Colors.blueGrey,
                       onTap: () {
-                        // KODE YANG DIUBAH: Mengarahkan langsung ke halaman baru
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const PrivacyPolicyScreen(),
-                          ),
-                        );
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
                       },
                     ),
-
                     const SizedBox(height: 40),
                     Center(
                       child: Column(
                         children: [
-                          Text(
-                            'Jaya Sentosa Mobile',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black.withOpacity(0.3),
-                            ),
-                          ),
-                          Text(
-                            'Versi ${Constants.version}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.black.withOpacity(0.3),
-                            ),
-                          ),
+                          Text('Jaya Sentosa Mobile', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black.withOpacity(0.3))),
+                          Text('Versi ${Constants.version}', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.3))),
                         ],
                       ),
                     ),
@@ -289,24 +228,13 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
         currentIndex: 2,
         onTap: (int index) {
           if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const TagihanScreen()),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const TagihanScreen()));
           } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const PaymentHistoryScreen(),
-              ),
-            );
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const PaymentHistoryScreen()));
           }
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: 'Tagihan',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: 'Tagihan'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Riwayat'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
@@ -314,43 +242,14 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     );
   }
 
-  Widget _buildMenuTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildMenuTile({required IconData icon, required String title, required String subtitle, required Color iconColor, required VoidCallback onTap}) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 3))]),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: iconColor.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: iconColor, size: 28),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
-        ),
+        leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: iconColor, size: 28)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.black54)),
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,
       ),
