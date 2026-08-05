@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/invoice_model.dart';
-import '../models/payment_model.dart';
 import '../services/auth_service.dart';
 
 class PaymentDetailScreen extends StatefulWidget {
@@ -16,14 +15,7 @@ class PaymentDetailScreen extends StatefulWidget {
     this.transactionId,
   });
 
-  factory PaymentDetailScreen.fromInvoice({required InvoiceModel invoice}) {
-    final payment = PaymentModel.getPaymentByInvoiceId(invoice.id);
-    return PaymentDetailScreen(
-      invoice: invoice,
-      method: payment?.method,
-      transactionId: payment?.transactionId,
-    );
-  }
+  // FUNGSI FACTORY DUMMY DATA TELAH DIHAPUS 🚀
 
   @override
   State<PaymentDetailScreen> createState() => _PaymentDetailScreenState();
@@ -78,10 +70,9 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    // 🚀 PERBAIKAN LOGIKA STATUS LUNAS (ANTI-ERROR)
+    // Logika penentu status lunas
     final String statusLower = widget.invoice.status.toLowerCase();
     
-    // Mengecek seluruh kata kunci status lunas yang mungkin dikirim oleh API
     final bool isSuccess = [
       'lunas', 
       'paid', 
