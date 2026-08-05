@@ -5,6 +5,8 @@ import 'package:jaya_sentosa_mobile/models/invoice_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'tagihan_screen.dart'; 
 import 'profile_menu_screen.dart'; 
+// 🚀 DITAMBAHKAN: Import halaman detail pembayaran
+import 'payment_detail_screen.dart'; 
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -14,7 +16,7 @@ class PaymentHistoryScreen extends StatefulWidget {
 }
 
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
-  final int _currentIndex = 1; // Index 1 untuk halaman Riwayat
+  final int _currentIndex = 1; 
   String currentUserId = ""; 
 
   @override
@@ -64,7 +66,6 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         title: const Text('Riwayat Pembayaran', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       
-      // HAPUS PENGGUNAAN STACK DAN KEMBALI MENGGUNAKAN SINGLECHILDSCROLLVIEW STANDAR
       body: RefreshIndicator(
         onRefresh: _refreshData,
         color: const Color(0xFF1E3A8A),
@@ -72,7 +73,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
         child: currentUserId.isEmpty 
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
           : SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(), // WAJIB DITAMBAHKAN
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16.0),
               child: FutureBuilder<List<InvoiceModel>>(
               future: ApiService.fetchPaidInvoices(currentUserId), 
@@ -119,57 +120,69 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                       child: Card(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 2,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade50,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                        clipBehavior: Clip.antiAlias, // 🚀 WAJIB AGAR EFEK KLIK (INKWELL) TIDAK KELUAR BATAS
+                        child: InkWell(
+                          // 🚀 DITAMBAHKAN: Aksi klik pindah ke layar detail
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PaymentDetailScreen(invoice: invoice),
                               ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.check_circle, color: Colors.green, size: 28),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Periode ${invoice.periode}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Berhasil', 
+                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      'Periode ${invoice.periode}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      _formatCurrency(invoice.jumlah), 
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E3A8A)),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      'Berhasil', 
-                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade100,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'LUNAS',
+                                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 10),
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    _formatCurrency(invoice.jumlah), 
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E3A8A)),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      'LUNAS',
-                                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 10),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -181,7 +194,6 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
           ),
       ),
 
-      // ---> INI TOMBOL BANTUAN YANG SAMA PERSIS DENGAN HALAMAN TAGIHAN <---
       floatingActionButton: FloatingActionButton(
         onPressed: _launchWhatsApp,
         backgroundColor: const Color(0xFF25D366), 

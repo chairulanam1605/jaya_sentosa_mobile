@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/invoice_model.dart';
 import '../models/payment_model.dart';
 import '../services/auth_service.dart';
@@ -32,6 +33,10 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
+  // Variabel Cache Permanen
+  String _userName = 'Memuat...';
+  String _userPackage = 'Memuat...';
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +49,25 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
       curve: Curves.elasticOut,
     );
     _controller.forward();
+
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final user = AuthService.currentUser;
+
+    if (user != null) {
+      await prefs.setString('cache_fullName', user.fullName);
+      await prefs.setString('cache_packageName', user.packageName);
+    }
+
+    if (mounted) {
+      setState(() {
+        _userName = prefs.getString('cache_fullName') ?? 'Pelanggan JSG';
+        _userPackage = prefs.getString('cache_packageName') ?? 'Paket WiFi JSG';
+      });
+    }
   }
 
   @override
@@ -54,10 +78,22 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final user = AuthService.currentUser!;
-    final isSuccess = widget.invoice.status == 'paid' || (widget.method != null && widget.transactionId != null);
-    final displayMethod = widget.method ?? (isSuccess ? 'Transfer Bank' : 'Belum dibayar');
-    final displayTransactionId = widget.transactionId ?? 'TRX-${widget.invoice.id}-${widget.invoice.paidDate?.millisecondsSinceEpoch}';
+    // 🚀 PERBAIKAN LOGIKA STATUS LUNAS (ANTI-ERROR)
+    final String statusLower = widget.invoice.status.toLowerCase();
+    
+    // Mengecek seluruh kata kunci status lunas yang mungkin dikirim oleh API
+    final bool isSuccess = [
+      'lunas', 
+      'paid', 
+      'settlement', 
+      'success', 
+      'berhasil'
+    ].contains(statusLower) || (widget.method != null && widget.transactionId != null);
+
+    final displayMethod = widget.method ?? (isSuccess ? 'Transfer Bank / Midtrans' : 'Belum dibayar');
+    
+    final fallbackTime = widget.invoice.paidDate?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+    final displayTransactionId = widget.transactionId ?? 'TRX-${widget.invoice.id}-$fallbackTime';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -143,8 +179,8 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                           const SizedBox(height: 20),
                           _detailRow('ID Transaksi', displayTransactionId),
                           _detailRow('Tanggal', widget.invoice.paidDate != null ? _formatDate(widget.invoice.paidDate!) : (isSuccess ? _formatDate(DateTime.now()) : '-')),
-                          _detailRow('Nama Pelanggan', user.fullName),
-                          _detailRow('Layanan', user.packageName),
+                          _detailRow('Nama Pelanggan', _userName),
+                          _detailRow('Layanan', _userPackage),
                           _detailRow('Metode', displayMethod),
                         ],
                       ),
@@ -198,7 +234,7 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                     shadowColor: const Color(0xFF1E3A8A).withOpacity(0.4),
                   ),
                   child: const Text(
-                    'KEMBALI KE BERANDA',
+                    'KEMBALI',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                   ),
                 ),
@@ -223,7 +259,7 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
           Flexible(
             child: Text(
               value,
-              textAlign: Radius.zero.x == 0 ? TextAlign.right : null,
+              textAlign: TextAlign.right,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
           ),
