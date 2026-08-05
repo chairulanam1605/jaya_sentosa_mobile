@@ -18,7 +18,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
     _loadUserId();
   }
 
-  // Mengambil ID User yang sedang login
   Future<void> _loadUserId() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -32,7 +31,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
     await Future.delayed(const Duration(seconds: 1));
   }
 
-  // Fungsi pembantu untuk memformat waktu dari server MySQL
   String _formatDateTime(String dateString) {
     try {
       DateTime date = DateTime.parse(dateString);
@@ -65,7 +63,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Latar abu-abu terang
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text(
           'Notifikasi',
@@ -75,7 +73,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      // FutureBuilder untuk mengambil data asli dari Laravel
+
       body: RefreshIndicator(
         onRefresh: _refreshData,
         color: const Color(0xFF1E3A8A),
@@ -101,7 +99,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     return _buildEmptyState();
                   }
 
-                  // Data berhasil diambil
                   final notifs = snapshot.data!;
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(
@@ -121,13 +118,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
     );
   }
 
-  // Widget untuk membuat baris notifikasi yang bisa di-expand (Menerima data dinamis)
   Widget _buildNotificationCard(dynamic notif) {
-    // Membaca data dari API Laravel
     String title = notif['judul'] ?? 'Pemberitahuan';
     String message = notif['pesan'] ?? '';
     String date = _formatDateTime(notif['created_at']);
-    // Mengecek status baca (Laravel boolean biasanya return 1/0 atau true/false)
+
     bool isRead = notif['is_read'] == 1 || notif['is_read'] == true;
 
     return Container(
@@ -143,26 +138,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
           ),
         ],
       ),
-      // Theme digunakan untuk menghilangkan garis batas bawaan ExpansionTile
+
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          // =========================================================
-          // PERBAIKAN: Sensor untuk menghilangkan titik merah saat ditekan
-          // =========================================================
           onExpansionChanged: (bool expanded) {
             if (expanded && !isRead) {
               setState(() {
-                notif['is_read'] = 1; // Ubah data lokal, titik merah hilang
+                notif['is_read'] = 1;
               });
 
               if (notif['id'] != null) {
-                // Lapor ke server Laravel
                 ApiService.markNotifikasiAsRead(notif['id'].toString());
               }
             }
           },
-          // =========================================================
+
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Container(
             padding: const EdgeInsets.all(12),
@@ -189,7 +180,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   ),
                 ),
               ),
-              // Indikator titik merah kecil jika notifikasi belum dibaca
+
               if (!isRead)
                 Container(
                   margin: const EdgeInsets.only(left: 8),
@@ -209,7 +200,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
               style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
             ),
           ),
-          // Bagian ini adalah isi detail notifikasi yang akan muncul saat di-klik
+
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
@@ -228,10 +219,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
     );
   }
 
-  // Tampilan jika daftar notifikasi kosong
   Widget _buildEmptyState() {
     return ListView(
-      physics: const AlwaysScrollableScrollPhysics(), // Wajib agar bisa ditarik
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         SizedBox(height: MediaQuery.of(context).size.height * 0.3),
         Center(

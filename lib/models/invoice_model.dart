@@ -1,7 +1,7 @@
 class InvoiceModel {
   final String id;
-  final String periode; // Diseragamkan menjadi bahasa Indonesia
-  final double jumlah;  // Diseragamkan menjadi bahasa Indonesia
+  final String periode;
+  final double jumlah;
   final String status;
   final DateTime? paidDate;
 
@@ -13,16 +13,19 @@ class InvoiceModel {
     this.paidDate,
   });
 
-  // Fungsi untuk menerima data dari API Laravel
   factory InvoiceModel.fromJson(Map<String, dynamic> json) {
     return InvoiceModel(
       id: json['id']?.toString() ?? '0',
       periode: json['periode'] ?? '-',
-      // Memastikan konversi nominal uang aman
-      jumlah: json['jumlah'] != null ? double.parse(json['jumlah'].toString()) : 0.0,
+
+      jumlah: json['jumlah'] != null
+          ? double.parse(json['jumlah'].toString())
+          : 0.0,
       status: json['status_pembayaran'] ?? 'unpaid',
-      // Mengambil tanggal bayar jika sudah lunas
-      paidDate: json['paid_date'] != null ? DateTime.tryParse(json['paid_date'].toString()) : null,
+
+      paidDate: json['paid_date'] != null
+          ? DateTime.tryParse(json['paid_date'].toString())
+          : null,
     );
   }
 }

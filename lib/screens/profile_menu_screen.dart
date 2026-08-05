@@ -22,7 +22,6 @@ class ProfileMenuScreen extends StatefulWidget {
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
   File? _imageFile;
 
-  // Variabel Cache Permanen
   String _userName = 'Memuat...';
   String _userPackage = 'Memuat...';
   String _fotoUrl = '';
@@ -50,10 +49,9 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     });
 
     _loadSavedImage();
-    _fetchFreshProfile(); // Otomatis cek update data saat layar dibuka
+    _fetchFreshProfile(); 
   }
 
-  // 🚀 FUNGSI BARU: Ambil Profil Terbaru secara Real-Time
   Future<void> _fetchFreshProfile() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId = prefs.getString('user_id') ?? '';
@@ -92,12 +90,10 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
     }
   }
 
-  // 🚀 PERBAIKAN: Menggunakan Kunci Spesifik User ID
   Future<void> _loadSavedImage() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId = prefs.getString('user_id') ?? '';
     
-    // Kunci menjadi spesifik: profile_image_path_123
     String? savedPath = prefs.getString('profile_image_path_$userId');
 
     if (savedPath != null && savedPath.isNotEmpty) {
@@ -108,7 +104,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
         });
       }
     } else {
-      // Kosongkan _imageFile jika user ini memang belum pernah upload di HP ini
       setState(() {
         _imageFile = null;
       });
@@ -161,7 +156,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
               await AuthService.logout();
-              // Bersihkan data profil sementara saat logout agar bersih
               SharedPreferences prefs = await SharedPreferences.getInstance();
               await prefs.remove('user_id');
               
@@ -232,7 +226,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                       iconColor: const Color(0xFF1E3A8A),
                       onTap: () async {
                         await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileDetailScreen()));
-                        _refreshData(); // Refresh segera setelah pulang dari Detail
+                        _refreshData();
                       },
                     ),
                     const SizedBox(height: 12),

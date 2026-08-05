@@ -20,9 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
-  // ========================================================
-  // FITUR BARU: Fungsi untuk membuka WhatsApp Admin
-  // ========================================================
   Future<void> _launchWhatsAppSupport() async {
     const String phoneNumber = "6285165863800"; // Nomor WhatsApp Admin JSG
     const String message = "Halo Admin Jaya Sentosa Group, saya butuh bantuan untuk login ke aplikasi Jaya Sentosa Mobile.";
@@ -49,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ---> FUNGSI LOGIN YANG SUDAH DISAMBUNGKAN KE API_SERVICE
   void _doLogin() async {
     String nik = _nikController.text.trim();
     String password = _passwordController.text.trim();
@@ -131,7 +127,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // --- LOGO SECTION ---
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -172,7 +167,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 40),
 
-                  // --- LOGIN FORM CARD ---
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -201,7 +195,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Input NIK
                         _buildTextField(
                           controller: _nikController,
                           label: 'NIK',
@@ -210,7 +203,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         
-                        // Input Password
                         _buildTextField(
                           controller: _passwordController,
                           label: 'Kata Sandi',
@@ -219,11 +211,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           isPassword: true, 
                         ),
 
-                        // Lupa Kata Sandi Align Kanan
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: _launchWhatsAppSupport, // Mengarahkan ke WhatsApp
+                            onPressed: _launchWhatsAppSupport,
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -285,7 +276,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 32),
 
-                  // --- FOOTER HELP (BISA DIKLIK) ---
                   Text(
                     'Butuh bantuan? Hubungi kami',
                     textAlign: TextAlign.center,
@@ -296,7 +286,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   
-                  // Bagian ini diubah menjadi tombol yang bisa diklik
                   Material(
                     color: Colors.transparent,
                     child: InkWell(
@@ -337,7 +326,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Helper Widget untuk TextField yang rapi
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,

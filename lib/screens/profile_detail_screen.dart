@@ -129,7 +129,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
-  // 🚀 FUNGSI BARU: Menghapus Foto Profil
   Future<void> _deleteProfilePicture() async {
     // Tampilkan Dialog Konfirmasi
     bool? confirm = await showDialog<bool>(
@@ -157,23 +156,18 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       },
     );
 
-    // Jika pengguna menekan "Hapus"
     if (confirm == true) {
       setState(() {
-        _isUploading = true; // Pakai indikator loading sementara memproses
+        _isUploading = true;
       });
 
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String userId = prefs.getString('user_id') ?? '';
 
-      // Hapus data foto dari memori lokal (Cache)
       if (userId.isNotEmpty) {
         await prefs.remove('profile_image_path_$userId');
       }
       await prefs.setString('cache_fotoProfile', ''); 
-
-      // 💡 CATATAN: Jika di backend ada API untuk menghapus foto (misal ApiService.deleteProfilePicture),
-      // Anda bisa memanggilnya di sini. Untuk saat ini, kita bersihkan tampilannya di aplikasi.
 
       if (mounted) {
         setState(() {
@@ -222,14 +216,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                         _pickAndUploadImage(ImageSource.gallery);
                       },
                     ),
-                    // 🚀 TAMBAHAN: Tombol Hapus hanya muncul jika foto tidak kosong
                     if (_imageFile != null || _fotoUrl.isNotEmpty)
                       ListTile(
                         leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                         title: const Text('Hapus Foto Profil', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
                         onTap: () {
                           Navigator.of(context).pop();
-                          _deleteProfilePicture(); // Panggil fungsi hapus
+                          _deleteProfilePicture();
                         },
                       ),
                   ],

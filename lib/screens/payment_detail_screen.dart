@@ -15,17 +15,15 @@ class PaymentDetailScreen extends StatefulWidget {
     this.transactionId,
   });
 
-  // FUNGSI FACTORY DUMMY DATA TELAH DIHAPUS 🚀
-
   @override
   State<PaymentDetailScreen> createState() => _PaymentDetailScreenState();
 }
 
-class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTickerProviderStateMixin {
+class _PaymentDetailScreenState extends State<PaymentDetailScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
-  // Variabel Cache Permanen
   String _userName = 'Memuat...';
   String _userPackage = 'Memuat...';
 
@@ -70,21 +68,27 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    // Logika penentu status lunas
     final String statusLower = widget.invoice.status.toLowerCase();
-    
-    final bool isSuccess = [
-      'lunas', 
-      'paid', 
-      'settlement', 
-      'success', 
-      'berhasil'
-    ].contains(statusLower) || (widget.method != null && widget.transactionId != null);
 
-    final displayMethod = widget.method ?? (isSuccess ? 'Transfer Bank / Midtrans' : 'Belum dibayar');
-    
-    final fallbackTime = widget.invoice.paidDate?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
-    final displayTransactionId = widget.transactionId ?? 'TRX-${widget.invoice.id}-$fallbackTime';
+    final bool isSuccess =
+        [
+          'lunas',
+          'paid',
+          'settlement',
+          'success',
+          'berhasil',
+        ].contains(statusLower) ||
+        (widget.method != null && widget.transactionId != null);
+
+    final displayMethod =
+        widget.method ??
+        (isSuccess ? 'Transfer Bank / Midtrans' : 'Belum dibayar');
+
+    final fallbackTime =
+        widget.invoice.paidDate?.millisecondsSinceEpoch ??
+        DateTime.now().millisecondsSinceEpoch;
+    final displayTransactionId =
+        widget.transactionId ?? 'TRX-${widget.invoice.id}-$fallbackTime';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -92,7 +96,10 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
         automaticallyImplyLeading: false,
         title: Text(
           isSuccess ? 'Bukti Pembayaran' : 'Detail Tagihan',
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: const Color(0xFF1E3A8A),
         elevation: 0,
@@ -108,18 +115,22 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: isSuccess ? Colors.green.shade50 : Colors.orange.shade50,
+                    color: isSuccess
+                        ? Colors.green.shade50
+                        : Colors.orange.shade50,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    isSuccess ? Icons.check_circle_rounded : Icons.pending_rounded,
+                    isSuccess
+                        ? Icons.check_circle_rounded
+                        : Icons.pending_rounded,
                     size: 100,
                     color: isSuccess ? Colors.green : Colors.orange,
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               Text(
                 isSuccess ? 'Pembayaran Berhasil' : 'Menunggu Pembayaran',
                 style: TextStyle(
@@ -130,11 +141,15 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
               ),
               const SizedBox(height: 8),
               Text(
-                isSuccess 
-                  ? 'Tagihan untuk periode ${widget.invoice.periode}\ntelah lunas dibayarkan.' 
-                  : 'Silakan selesaikan pembayaran Anda.',
+                isSuccess
+                    ? 'Tagihan untuk periode ${widget.invoice.periode}\ntelah lunas dibayarkan.'
+                    : 'Silakan selesaikan pembayaran Anda.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 15, color: Colors.black54, height: 1.5),
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Colors.black54,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 40),
 
@@ -159,31 +174,50 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.receipt_long_rounded, color: Color(0xFF1E3A8A), size: 20),
+                              Icon(
+                                Icons.receipt_long_rounded,
+                                color: Color(0xFF1E3A8A),
+                                size: 20,
+                              ),
                               SizedBox(width: 8),
                               Text(
                                 'Rincian Transaksi',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 20),
                           _detailRow('ID Transaksi', displayTransactionId),
-                          _detailRow('Tanggal', widget.invoice.paidDate != null ? _formatDate(widget.invoice.paidDate!) : (isSuccess ? _formatDate(DateTime.now()) : '-')),
+                          _detailRow(
+                            'Tanggal',
+                            widget.invoice.paidDate != null
+                                ? _formatDate(widget.invoice.paidDate!)
+                                : (isSuccess
+                                      ? _formatDate(DateTime.now())
+                                      : '-'),
+                          ),
                           _detailRow('Nama Pelanggan', _userName),
                           _detailRow('Layanan', _userPackage),
                           _detailRow('Metode', displayMethod),
                         ],
                       ),
                     ),
-                    
+
                     Row(
-                      children: List.generate(30, (index) => Expanded(
-                        child: Container(
-                          color: index % 2 == 0 ? Colors.transparent : Colors.grey.withOpacity(0.3),
-                          height: 2,
+                      children: List.generate(
+                        30,
+                        (index) => Expanded(
+                          child: Container(
+                            color: index % 2 == 0
+                                ? Colors.transparent
+                                : Colors.grey.withOpacity(0.3),
+                            height: 2,
+                          ),
                         ),
-                      )),
+                      ),
                     ),
 
                     Padding(
@@ -193,7 +227,11 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                         children: [
                           const Text(
                             'Total Bayar',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black54),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black54,
+                            ),
                           ),
                           Text(
                             _formatCurrency(widget.invoice.jumlah),
@@ -220,13 +258,19 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
                     backgroundColor: const Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
                     elevation: 4,
                     shadowColor: const Color(0xFF1E3A8A).withOpacity(0.4),
                   ),
                   child: const Text(
                     'KEMBALI',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                 ),
               ),
@@ -245,13 +289,21 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black54,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           Flexible(
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
           ),
         ],
@@ -262,7 +314,9 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
   String _formatCurrency(double amount) {
     String result = amount.toStringAsFixed(0);
     result = result.replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.');
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
     return 'Rp $result';
   }
 
@@ -271,7 +325,20 @@ class _PaymentDetailScreenState extends State<PaymentDetailScreen> with SingleTi
   }
 
   String _getMonthName(int month) {
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
     return months[month - 1];
   }
 }

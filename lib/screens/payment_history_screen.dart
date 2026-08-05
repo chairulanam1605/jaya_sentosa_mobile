@@ -5,7 +5,6 @@ import 'package:jaya_sentosa_mobile/models/invoice_model.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'tagihan_screen.dart'; 
 import 'profile_menu_screen.dart'; 
-// 🚀 DITAMBAHKAN: Import halaman detail pembayaran
 import 'payment_detail_screen.dart'; 
 
 class PaymentHistoryScreen extends StatefulWidget {
@@ -120,9 +119,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                       child: Card(
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 2,
-                        clipBehavior: Clip.antiAlias, // 🚀 WAJIB AGAR EFEK KLIK (INKWELL) TIDAK KELUAR BATAS
+                        clipBehavior: Clip.antiAlias,
                         child: InkWell(
-                          // 🚀 DITAMBAHKAN: Aksi klik pindah ke layar detail
                           onTap: () {
                             Navigator.push(
                               context,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/api_service.dart'; // Import ApiService
-import '../models/user_model.dart'; // Import UserModel
+import '../services/api_service.dart';
+import '../models/user_model.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -14,16 +14,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
-  bool _isLoading = false; // Tambahan untuk indikator loading
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     final user = AuthService.currentUser!;
-    // Mengubah isi form menjadi kosong jika datanya masih null/strip dari database
+
     _nameController = TextEditingController(text: user.fullName);
-    _phoneController = TextEditingController(text: user.phone == '-' ? '' : user.phone);
-    _emailController = TextEditingController(text: user.email == 'Belum ada email' ? '' : user.email);
+    _phoneController = TextEditingController(
+      text: user.phone == '-' ? '' : user.phone,
+    );
+    _emailController = TextEditingController(
+      text: user.email == 'Belum ada email' ? '' : user.email,
+    );
   }
 
   @override
@@ -34,42 +38,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  // ---> FUNGSI SIMPAN YANG SUDAH TERHUBUNG KE DATABASE <---
   Future<void> _saveChanges() async {
-    // Validasi form kosong
-    if (_nameController.text.trim().isEmpty || _emailController.text.trim().isEmpty || _phoneController.text.trim().isEmpty) {
+    if (_nameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _phoneController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Semua kolom harus diisi!'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Semua kolom harus diisi!'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
 
-    // Menghilangkan keyboard saat tombol simpan ditekan
     FocusScope.of(context).unfocus();
-    
+
     setState(() {
-      _isLoading = true; // Munculkan loading
+      _isLoading = true;
     });
 
     try {
       final user = AuthService.currentUser!;
-      
-      // Memanggil fungsi updateProfile dari ApiService
+
       bool isSuccess = await ApiService.updateProfile(
-        user.customerNumber, // Mengirim NIK untuk mencari data di database
+        user.customerNumber,
         _nameController.text.trim(),
         _emailController.text.trim(),
         _phoneController.text.trim(),
       );
 
       if (isSuccess) {
-        // Memperbarui data AuthService.currentUser agar halaman profil langsung berubah tanpa perlu login ulang
         AuthService.currentUser = UserModel(
           id: user.id,
           fullName: _nameController.text.trim(),
           packageName: user.packageName,
           phone: _phoneController.text.trim(),
-          email: _emailController.text.trim(), // Email baru berhasil ditanam
+          email: _emailController.text.trim(),
           customerNumber: user.customerNumber,
           since: user.since,
           masaAktif: user.masaAktif,
@@ -84,7 +88,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          Navigator.pop(context); // Kembali ke halaman sebelumnya
+          Navigator.pop(context);
         }
       }
     } catch (e) {
@@ -100,7 +104,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false; // Matikan loading
+          _isLoading = false;
         });
       }
     }
@@ -113,7 +117,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: AppBar(
         title: const Text(
           'Ubah Profil',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: const Color(0xFF1E3A8A),
         elevation: 0,
@@ -127,12 +135,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             children: [
               const Text(
                 'Perbarui Data Anda',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Pastikan data profil Anda (terutama Email) valid untuk proses pembayaran layanan WiFi.',
-                style: TextStyle(fontSize: 14, color: Colors.black54, height: 1.5),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 32),
 
@@ -143,7 +159,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 icon: Icons.person_outline,
               ),
               const SizedBox(height: 20),
-              
+
               _buildTextField(
                 controller: _phoneController,
                 label: 'Nomor Telepon',
@@ -152,21 +168,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 20),
-              
+
               _buildTextField(
                 controller: _emailController,
                 label: 'Alamat Email',
-                hint: 'contoh: nama@gmail.com', // Hint diperjelas
+                hint: 'contoh: nama@gmail.com',
                 icon: Icons.email_outlined,
                 keyboardType: TextInputType.emailAddress,
               ),
-              
+
               const SizedBox(height: 40),
 
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveChanges, // Nonaktifkan jika sedang proses
+                  onPressed: _isLoading ? null : _saveChanges,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E3A8A),
                     foregroundColor: Colors.white,
@@ -176,16 +192,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     elevation: 3,
                   ),
-                  child: _isLoading 
-                    ? const SizedBox(
-                        height: 20, 
-                        width: 20, 
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                      )
-                    : const Text(
-                        'SIMPAN PERUBAHAN',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                      ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'SIMPAN PERUBAHAN',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -205,7 +228,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -217,7 +247,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             prefixIcon: Icon(icon, color: const Color(0xFF1E3A8A), size: 22),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),

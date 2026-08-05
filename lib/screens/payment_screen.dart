@@ -113,7 +113,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 🚀 MENGAMBIL DATA USER UNTUK DITAMPILKAN DI KARTU RINGKASAN
     final user = AuthService.currentUser;
 
     return Scaffold(
@@ -129,7 +128,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- RINGKASAN TAGIHAN (SESUAI DESAIN UI-MU) ---
             const Text('Ringkasan Tagihan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 12),
             Container(
@@ -170,13 +168,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             const SizedBox(height: 32),
 
-            // --- HEADER METODE PEMBAYARAN ---
             const Text('Pilih Metode Pembayaran', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
             const SizedBox(height: 16),
 
-            // ========================================================
-            // KATEGORI 1: E-WALLET / DIGITAL PAYMENT
-            // ========================================================
             _buildCategoryGroup(
               title: "E-Wallet & QRIS",
               icon: Icons.account_balance_wallet_rounded,
@@ -189,9 +183,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             const SizedBox(height: 14),
 
-            // ========================================================
-            // KATEGORI 2: TRANSFER BANK (VIRTUAL ACCOUNT)
-            // ========================================================
             _buildCategoryGroup(
               title: "Transfer Bank",
               icon: Icons.account_balance_rounded,
@@ -208,9 +199,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             const SizedBox(height: 14),
 
-            // ========================================================
-            // KATEGORI 3: RETAIIL / MINIMARKET
-            // ========================================================
             _buildCategoryGroup(
               title: "Gerai Retail / Minimarket",
               icon: Icons.store_mall_directory_rounded,
@@ -226,7 +214,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
       ),
       
-      // --- TOMBOL ACTION ---
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
@@ -252,7 +239,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // Widget Pembantu Baris Info
   Widget _infoRow(String label, String value, {bool isBold = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -263,9 +249,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  // ====================================================================
-  // WIDGET KATEGORI UTAMA (EXPANSION TILE CUSTOM)
-  // ====================================================================
   Widget _buildCategoryGroup({
     required String title,
     required IconData icon,
