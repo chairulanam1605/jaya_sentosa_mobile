@@ -77,7 +77,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         
         MidtransSDK? midtrans = await MidtransSDK.init(
           config: MidtransConfig(
-            clientKey: 'SB-Mid-client-Z1tHofBtAPP6XoDO', 
+            clientKey: 'BRN-0225-1789743946195',
             merchantBaseUrl: 'https://adminjsg.com/public/', 
             colorTheme: ColorTheme(
               colorPrimary: const Color(0xFF1E3A8A), 
