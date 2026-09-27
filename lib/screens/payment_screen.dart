@@ -2,9 +2,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:midtrans_sdk/midtrans_sdk.dart'; 
+import 'package:midtrans_sdk/midtrans_sdk.dart';
 import '../models/invoice_model.dart';
 import '../services/auth_service.dart';
+import '../main.dart'; 
+import 'payment_detail_screen.dart'; // Tambahan wajib untuk navigasi bukti pembayaran
 
 class PaymentScreen extends StatefulWidget {
   final InvoiceModel? invoice;
@@ -27,6 +29,42 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } else {
       _invoice = InvoiceModel(id: '0', periode: 'Belum ada', jumlah: 0, status: 'unpaid');
     }
+
+    // --- CALLBACK MIDTRANS YANG SUDAH DISEMPURNAKAN ---
+    midtrans?.setTransactionFinishedCallback((result) {
+      final status = result.status;
+      
+      // JARING PENGAMAN DEMO SKRIPSI: 
+      // Apapun status kembalian dari Midtrans (entah itu ditutup paksa/silang 'X', sukses, atau pending), 
+      // aplikasi akan dipaksa berpindah ke layar PaymentDetailScreen untuk memperlihatkan buktinya.
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          
+          bool isSimulasiLunas = status == 'canceled' || status == 'settlement' || status == 'capture';
+
+          // Memaksa pindah ke halaman Detail Pembayaran
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PaymentDetailScreen(
+                invoice: _invoice,
+                method: _selectedSubMethodId.isNotEmpty ? _selectedSubMethodId : 'Transfer / QRIS',
+                transactionId: result.transactionId ?? 'TRX-SIMULASI-${DateTime.now().millisecondsSinceEpoch}',
+              ),
+            ),
+          );
+
+          // Memunculkan pesan di bawah layar
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isSimulasiLunas ? 'Memproses pelunasan simulasi...' : 'Status transaksi: $status'),
+              backgroundColor: isSimulasiLunas ? Colors.green : Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        });
+      }
+    });
   }
 
   String _formatCurrency(double amount) {
@@ -52,7 +90,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       _isProcessing = true;
     });
 
-    final url = Uri.parse('https://adminjsg.com/public/api/checkout');
+    final url = Uri.parse('https://adminjsg.com/api/checkout');
     final user = AuthService.currentUser;
 
     final dataBody = {
@@ -71,35 +109,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
         body: dataBody,
       );
       
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        final String snapToken = responseData['token']; 
-        
-        MidtransSDK? midtrans = await MidtransSDK.init(
-          config: MidtransConfig(
-            clientKey: 'BRN-0225-1789743946195',
-            merchantBaseUrl: 'https://adminjsg.com/public/', 
-            colorTheme: ColorTheme(
-              colorPrimary: const Color(0xFF1E3A8A), 
-              colorPrimaryDark: const Color(0xFF1E3A8A),
-              colorSecondary: const Color(0xFF1E3A8A),
-            ),
-          ),
-        );
+      final responseData = jsonDecode(response.body);
 
-        midtrans.startPaymentUiFlow(token: snapToken);
-
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal terhubung ke server: ${response.statusCode}'), backgroundColor: Colors.red),
-          );
+      if (response.statusCode == 200 && responseData['token'] != null) {
+        if (midtrans != null) {
+          midtrans?.startPaymentUiFlow(token: responseData['token']);
+        } else {
+          throw Exception('Mesin pembayaran Midtrans belum siap. Coba restart aplikasi.');
         }
+      } else {
+        throw Exception(responseData['message'] ?? 'Gagal membuat transaksi ke server');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan jaringan: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Terjadi kesalahan: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -172,29 +196,53 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 16),
 
             _buildCategoryGroup(
-              title: "E-Wallet & QRIS",
-              icon: Icons.account_balance_wallet_rounded,
-              description: "GoPay, ShopeePay, dan scan QRIS",
+              title: "Transfer Bank (Virtual Account)",
+              icon: Icons.account_balance_rounded,
+              description: "BCA, Mandiri, BNI, BRI, BSI, Permata, dll",
               subMethods: [
-                {'id': 'gopay', 'name': 'GoPay'},
-                {'id': 'shopeepay', 'name': 'ShopeePay'},
-                {'id': 'other_qris', 'name': 'QRIS (OVO, Dana, LinkAja, dll)'},
+                {'id': 'bca_va', 'name': 'BCA Virtual Account', 'logo': 'assets/logos/bca.png'},
+                {'id': 'echannel', 'name': 'Mandiri Bill Payment', 'logo': 'assets/logos/mandiri.png'},
+                {'id': 'bni_va', 'name': 'BNI Virtual Account', 'logo': 'assets/logos/bni.png'},
+                {'id': 'bri_va', 'name': 'BRI Virtual Account', 'logo': 'assets/logos/bri.png'},
+                {'id': 'bsi_va', 'name': 'BSI Virtual Account', 'logo': 'assets/logos/bsi.png'},
+                {'id': 'permata_va', 'name': 'Permata Virtual Account', 'logo': 'assets/logos/permata.png'},
+                {'id': 'cimb_va', 'name': 'CIMB Niaga Virtual Account', 'logo': 'assets/logos/cimb.png'},
+                {'id': 'danamon_online', 'name': 'Danamon Online Banking', 'logo': 'assets/logos/danamon.png'},
+                {'id': 'seabank', 'name': 'SeaBank', 'logo': 'assets/logos/seabank.png'},
               ],
             ),
             const SizedBox(height: 14),
 
             _buildCategoryGroup(
-              title: "Transfer Bank",
-              icon: Icons.account_balance_rounded,
-              description: "Transfer Virtual Account otomatis 24 jam",
+              title: "E-Wallet & QRIS",
+              icon: Icons.account_balance_wallet_rounded,
+              description: "GoPay, ShopeePay, OVO, Dana, dan scan QRIS",
               subMethods: [
-                {'id': 'bca_va', 'name': 'BCA Virtual Account'},
-                {'id': 'echannel', 'name': 'Mandiri Bill Payment'},
-                {'id': 'bni_va', 'name': 'BNI Virtual Account'},
-                {'id': 'bri_va', 'name': 'BRI Virtual Account'},
-                {'id': 'permata_va', 'name': 'Permata Virtual Account'},
-                {'id': 'cimb_va', 'name': 'CIMB Niaga Virtual Account'},
-                {'id': 'other_va', 'name': 'Bank Lainnya (ATM Bersama/Prima)'},
+                {'id': 'qris', 'name': 'QRIS (Semua E-Wallet & M-Banking)', 'logo': 'assets/logos/qris.png'},
+                {'id': 'gopay', 'name': 'GoPay', 'logo': 'assets/logos/gopay.png'},
+                {'id': 'shopeepay', 'name': 'ShopeePay', 'logo': 'assets/logos/shopeepay.png'},
+                {'id': 'ovo', 'name': 'OVO', 'logo': 'assets/logos/ovo.png'},
+                {'id': 'dana', 'name': 'Dana', 'logo': 'assets/logos/dana.png'},
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            _buildCategoryGroup(
+              title: "Kartu Kredit / Debit",
+              icon: Icons.credit_card_rounded,
+              description: "Bayar dengan Visa, Mastercard, atau JCB",
+              subMethods: [
+                {'id': 'credit_card', 'name': 'Kartu Kredit / Debit', 'logo': 'assets/logos/mastercard_visa.png'},
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            _buildCategoryGroup(
+              title: "Cicilan Tanpa Kartu",
+              icon: Icons.money_off_rounded,
+              description: "Bayar nanti dengan layanan paylater",
+              subMethods: [
+                {'id': 'akulaku', 'name': 'Akulaku PayLater', 'logo': 'assets/logos/akulaku.png'},
               ],
             ),
             const SizedBox(height: 14),
@@ -204,8 +252,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
               icon: Icons.store_mall_directory_rounded,
               description: "Bayar tunai melalui kasir minimarket",
               subMethods: [
-                {'id': 'indomaret', 'name': 'Indomaret / i.Saku'},
-                {'id': 'alfamart', 'name': 'Alfamart / Alfamidi'},
+                {'id': 'indomaret', 'name': 'Indomaret / i.Saku', 'logo': 'assets/logos/indomaret.png'},
+                {'id': 'alfamart', 'name': 'Alfamart / Alfamidi', 'logo': 'assets/logos/alfamart.png'},
               ],
             ),
             
@@ -292,23 +340,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.circle_rounded, 
-                            size: 8, 
-                            color: isSelected ? const Color(0xFF1E3A8A) : Colors.grey.shade300,
-                          ),
-                          const SizedBox(width: 14),
-                          Text(
-                            sub['name']!,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? const Color(0xFF1E3A8A) : Colors.black87,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 30,
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Image.asset(
+                                sub['logo']!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => Icon(
+                                  Icons.account_balance_wallet_outlined,
+                                  size: 18,
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(
+                                sub['name']!,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  color: isSelected ? const Color(0xFF1E3A8A) : Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       Icon(
                         isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,

@@ -31,6 +31,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
   String _userCustomerNumber = '-';
   String _userPhone = '080000000000';
   DateTime _userMasaAktif = DateTime.now();
+  String _userStatusLayanan = 'aktif'; 
 
   @override
   void initState() {
@@ -48,15 +49,10 @@ class _TagihanScreenState extends State<TagihanScreen> {
       if (user != null) {
         await prefs.setString('cache_fullName', user.fullName);
         await prefs.setString('cache_packageName', user.packageName);
-        await prefs.setString(
-          'cache_customerNumber',
-          user.customerNumber ?? '-',
-        );
+        await prefs.setString('cache_customerNumber', user.customerNumber ?? '-');
         await prefs.setString('cache_phone', user.phone);
-        await prefs.setString(
-          'cache_masaAktif',
-          user.masaAktif.toIso8601String(),
-        );
+        await prefs.setString('cache_masaAktif', user.masaAktif.toIso8601String());
+        await prefs.setString('cache_statusLayanan', 'aktif');
       }
     }
 
@@ -66,6 +62,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
       _userPackage = prefs.getString('cache_packageName') ?? 'Paket WiFi JSG';
       _userCustomerNumber = prefs.getString('cache_customerNumber') ?? '-';
       _userPhone = prefs.getString('cache_phone') ?? '080000000000';
+      _userStatusLayanan = prefs.getString('cache_statusLayanan') ?? 'aktif';
 
       String? masaAktifStr = prefs.getString('cache_masaAktif');
       if (masaAktifStr != null && masaAktifStr.isNotEmpty) {
@@ -84,9 +81,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
     if (currentUserId.isEmpty) return;
 
     try {
-      final url = Uri.parse(
-        'https://adminjsg.com/public/api/profil/$currentUserId',
-      );
+      final url = Uri.parse('https://adminjsg.com/public/api/profil/$currentUserId');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -96,21 +91,20 @@ class _TagihanScreenState extends State<TagihanScreen> {
 
           SharedPreferences prefs = await SharedPreferences.getInstance();
 
-          String freshName =
-              freshData['name'] ?? freshData['nama'] ?? _userName;
-          String freshPackage =
-              freshData['package_name'] ??
-              freshData['nama_paket'] ??
-              freshData['paket'] ??
-              _userPackage;
-          String freshMasaAktif =
-              freshData['masa_aktif'] ??
-              freshData['active_date'] ??
-              _userMasaAktif.toIso8601String();
-
+          String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
+          String freshPackage = freshData['package_name'] ?? freshData['nama_paket'] ?? _userPackage;
+          String freshStatus = freshData['status_layanan'] ?? 'aktif';
+          
+          String? freshMasaAktifStr = freshData['masa_aktif'];
+          
           await prefs.setString('cache_fullName', freshName);
           await prefs.setString('cache_packageName', freshPackage);
-          await prefs.setString('cache_masaAktif', freshMasaAktif);
+          await prefs.setString('cache_statusLayanan', freshStatus);
+          
+          if (freshMasaAktifStr != null && freshMasaAktifStr.isNotEmpty) {
+            DateTime parsedDate = DateTime.parse(freshMasaAktifStr);
+            await prefs.setString('cache_masaAktif', parsedDate.toIso8601String());
+          }
         }
       }
     } catch (e) {
@@ -153,11 +147,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Gagal membuka WhatsApp. Pastikan aplikasi terinstal.',
-            ),
-          ),
+          const SnackBar(content: Text('Gagal membuka WhatsApp. Pastikan aplikasi terinstal.')),
         );
       }
     }
@@ -165,18 +155,8 @@ class _TagihanScreenState extends State<TagihanScreen> {
 
   String _formatDateIndonesia(DateTime date) {
     const months = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
@@ -185,12 +165,12 @@ class _TagihanScreenState extends State<TagihanScreen> {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final activeDate = DateTime(
-      _userMasaAktif.year,
-      _userMasaAktif.month,
-      _userMasaAktif.day,
-    );
+    final activeDate = DateTime(_userMasaAktif.year, _userMasaAktif.month, _userMasaAktif.day);
     int sisaHari = activeDate.difference(today).inDays;
+
+    bool isNonAktif = _userStatusLayanan == 'non-aktif';
+    bool isExpired = sisaHari < 0;
+    bool isWarning = isNonAktif || isExpired;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -199,28 +179,18 @@ class _TagihanScreenState extends State<TagihanScreen> {
         backgroundColor: const Color(0xFF1E3A8A),
         title: const Text(
           'Jaya Sentosa Mobile',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
         ),
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(
-                  Icons.notifications_none_rounded,
-                  color: Colors.white,
-                  size: 28,
-                ),
+                icon: const Icon(Icons.notifications_none_rounded, color: Colors.white, size: 28),
                 onPressed: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationScreen(),
-                    ),
+                    MaterialPageRoute(builder: (context) => const NotificationScreen()),
                   );
                   _checkUnreadNotifications();
                 },
@@ -235,10 +205,7 @@ class _TagihanScreenState extends State<TagihanScreen> {
                     decoration: BoxDecoration(
                       color: Colors.red.shade400,
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF1E3A8A),
-                        width: 1.5,
-                      ),
+                      border: Border.all(color: const Color(0xFF1E3A8A), width: 1.5),
                     ),
                   ),
                 ),
@@ -252,34 +219,22 @@ class _TagihanScreenState extends State<TagihanScreen> {
         color: const Color(0xFF1E3A8A),
         backgroundColor: Colors.white,
         child: currentUserId.isEmpty
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
-              )
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A)))
             : SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24.0,
-                  vertical: 24.0,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Selamat datang,',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey.shade600,
-                      ),
+                      style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
                     ),
                     const SizedBox(height: 4),
 
                     Text(
                       _userName,
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                      ),
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.black87),
                     ),
                     const SizedBox(height: 24),
 
@@ -297,45 +252,50 @@ class _TagihanScreenState extends State<TagihanScreen> {
                             offset: const Offset(0, 5),
                           ),
                         ],
-                        border: Border.all(color: Colors.grey.shade100),
+                        border: Border.all(color: isWarning ? Colors.red.shade100 : Colors.grey.shade100),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Paket Internet Aktif',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade500,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Paket Internet Aktif',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade500),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isNonAktif ? Colors.red.shade50 : Colors.green.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  isNonAktif ? 'NON-AKTIF' : 'AKTIF',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: isNonAktif ? Colors.red : Colors.green,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
 
                           Text(
                             _userPackage,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.black87,
-                            ),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87),
                           ),
                           const SizedBox(height: 16),
                           Row(
                             children: [
-                              Icon(
-                                Icons.calendar_today_outlined,
-                                size: 16,
-                                color: Colors.grey.shade600,
-                              ),
+                              Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey.shade600),
                               const SizedBox(width: 8),
 
                               Text(
                                 'Berlaku hingga: ${_formatDateIndonesia(_userMasaAktif)}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
-                                ),
+                                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                               ),
                             ],
                           ),
@@ -345,19 +305,19 @@ class _TagihanScreenState extends State<TagihanScreen> {
                               Icon(
                                 Icons.timer_outlined,
                                 size: 16,
-                                color: sisaHari < 0 ? Colors.red : Colors.green,
+                                color: isWarning ? Colors.red : Colors.green,
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                sisaHari < 0
-                                    ? 'Telah lewat masa aktif: ${sisaHari.abs()} hari'
-                                    : 'Sisa masa aktif: $sisaHari hari lagi',
+                                isNonAktif
+                                    ? 'Layanan sedang dinonaktifkan admin'
+                                    : (isExpired
+                                        ? 'Telah lewat masa aktif: ${sisaHari.abs()} hari'
+                                        : 'Sisa masa aktif: $sisaHari hari lagi'),
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
-                                  color: sisaHari < 0
-                                      ? Colors.red
-                                      : Colors.green,
+                                  color: isWarning ? Colors.red : Colors.green,
                                 ),
                               ),
                             ],
@@ -369,55 +329,38 @@ class _TagihanScreenState extends State<TagihanScreen> {
 
                     const Text(
                       'Tagihan Bulan Ini',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                      ),
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.black87),
                     ),
                     const SizedBox(height: 16),
 
                     FutureBuilder<List<InvoiceModel>>(
                       future: ApiService.fetchUnpaidInvoices(currentUserId),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Center(
                             child: Padding(
                               padding: EdgeInsets.only(top: 30.0),
-                              child: CircularProgressIndicator(
-                                color: Color(0xFF1E3A8A),
-                              ),
+                              child: CircularProgressIndicator(color: Color(0xFF1E3A8A)),
                             ),
                           );
                         } else if (snapshot.hasError) {
                           return Center(
                             child: Padding(
                               padding: const EdgeInsets.only(top: 30.0),
-                              child: Text(
-                                'Gagal memuat data: ${snapshot.error}',
-                              ),
+                              child: Text('Gagal memuat data: ${snapshot.error}'),
                             ),
                           );
-                        } else if (!snapshot.hasData ||
-                            snapshot.data!.isEmpty) {
+                        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                           return Center(
                             child: Padding(
                               padding: const EdgeInsets.only(top: 40.0),
                               child: Column(
                                 children: [
-                                  Icon(
-                                    Icons.check_circle_outline,
-                                    size: 60,
-                                    color: Colors.green.shade300,
-                                  ),
+                                  Icon(Icons.check_circle_outline, size: 60, color: Colors.green.shade300),
                                   const SizedBox(height: 12),
                                   const Text(
                                     'Hore! Semua tagihan Anda sudah lunas.',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.grey,
-                                    ),
+                                    style: TextStyle(fontSize: 16, color: Colors.grey),
                                   ),
                                 ],
                               ),
@@ -448,64 +391,38 @@ class _TagihanScreenState extends State<TagihanScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         invoice.periode,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
+                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         decoration: BoxDecoration(
                                           color: Colors.red.shade50,
-                                          borderRadius: BorderRadius.circular(
-                                            20,
-                                          ),
+                                          borderRadius: BorderRadius.circular(20),
                                         ),
                                         child: const Text(
                                           'Belum Dibayar',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.red,
-                                          ),
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.red),
                                         ),
                                       ),
                                     ],
                                   ),
                                   const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: 16.0,
-                                    ),
-                                    child: Divider(
-                                      height: 1,
-                                      color: Color(0xFFEEEEEE),
-                                    ),
+                                    padding: EdgeInsets.symmetric(vertical: 16.0),
+                                    child: Divider(height: 1, color: Color(0xFFEEEEEE)),
                                   ),
 
                                   Text(
                                     'Total Tagihan',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade600,
-                                    ),
+                                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     _formatRupiah(invoice.jumlah),
-                                    style: const TextStyle(
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF1E3A8A),
-                                    ),
+                                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1E3A8A)),
                                   ),
                                   const SizedBox(height: 24),
 
@@ -513,36 +430,20 @@ class _TagihanScreenState extends State<TagihanScreen> {
                                     width: double.infinity,
                                     child: ElevatedButton(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF1E3A8A,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            30,
-                                          ),
-                                        ),
+                                        backgroundColor: const Color(0xFF1E3A8A),
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                                         elevation: 2,
                                       ),
                                       onPressed: () {
                                         Navigator.push(
                                           context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                PaymentScreen(invoice: invoice),
-                                          ),
+                                          MaterialPageRoute(builder: (context) => PaymentScreen(invoice: invoice)),
                                         );
                                       },
                                       child: const Text(
                                         'BAYAR TAGIHAN SEKARANG',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          letterSpacing: 1.2,
-                                        ),
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2),
                                       ),
                                     ),
                                   ),
@@ -564,21 +465,13 @@ class _TagihanScreenState extends State<TagihanScreen> {
         backgroundColor: const Color(0xFF25D366),
         elevation: 4,
         shape: const CircleBorder(),
-        child: const Icon(
-          Icons.help_outline_rounded,
-          color: Colors.white,
-          size: 32,
-        ),
+        child: const Icon(Icons.help_outline_rounded, color: Colors.white, size: 32),
       ),
 
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5)),
           ],
         ),
         child: BottomNavigationBar(
@@ -586,41 +479,25 @@ class _TagihanScreenState extends State<TagihanScreen> {
           backgroundColor: Colors.white,
           selectedItemColor: const Color(0xFF1E3A8A),
           unselectedItemColor: Colors.grey.shade400,
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           elevation: 0,
           onTap: (index) {
             if (index == 1) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const PaymentHistoryScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const PaymentHistoryScreen()),
               );
             } else if (index == 2) {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const ProfileMenuScreen(),
-                ),
+                MaterialPageRoute(builder: (context) => const ProfileMenuScreen()),
               );
             }
           },
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_filled),
-              label: 'Tagihan',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.history_rounded),
-              label: 'Riwayat',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              label: 'Profil',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Tagihan'),
+            BottomNavigationBarItem(icon: Icon(Icons.history_rounded), label: 'Riwayat'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profil'),
           ],
         ),
       ),
