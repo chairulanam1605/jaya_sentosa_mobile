@@ -1,6 +1,5 @@
-import 'dart:io';
-import 'dart:convert'; // Wajib untuk API
-import 'package:http/http.dart' as http; // Wajib untuk API
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,8 +19,6 @@ class ProfileMenuScreen extends StatefulWidget {
 }
 
 class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
-  File? _imageFile;
-
   String _userName = 'Memuat...';
   String _userPackage = 'Memuat...';
   String _fotoUrl = '';
@@ -48,7 +45,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
       _fotoUrl = prefs.getString('cache_fotoProfile') ?? '';
     });
 
-    _loadSavedImage();
     _fetchFreshProfile(); 
   }
 
@@ -68,9 +64,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
           
           String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
           String freshPackage = freshData['package_name'] ?? freshData['nama_paket'] ?? freshData['paket'] ?? _userPackage;
-          
-          // Antisipasi nama kolom foto di database
-          String freshFoto = freshData['foto_profil'] ?? freshData['foto'] ?? freshData['fotoProfile'] ?? '';
+          String freshFoto = freshData['foto_profile'] ?? '';
 
           await prefs.setString('cache_fullName', freshName);
           await prefs.setString('cache_packageName', freshPackage); 
@@ -87,26 +81,6 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
       }
     } catch (e) {
       print("Gagal mengambil profil terbaru: $e");
-    }
-  }
-
-  Future<void> _loadSavedImage() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String userId = prefs.getString('user_id') ?? '';
-    
-    String? savedPath = prefs.getString('profile_image_path_$userId');
-
-    if (savedPath != null && savedPath.isNotEmpty) {
-      File img = File(savedPath);
-      if (await img.exists()) {
-        setState(() {
-          _imageFile = img;
-        });
-      }
-    } else {
-      setState(() {
-        _imageFile = null;
-      });
     }
   }
 
@@ -142,7 +116,10 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fullImageUrl = _fotoUrl.isNotEmpty ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl' : '';
+    // Cache-busting agar selalu dapat gambar terbaru
+    final String fullImageUrl = _fotoUrl.isNotEmpty 
+        ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl?v=${DateTime.now().millisecondsSinceEpoch}' 
+        : '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -156,11 +133,13 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
               await AuthService.logout();
-              SharedPreferences prefs = await SharedPreferences.getInstance();
-              await prefs.remove('user_id');
               
               if (context.mounted) {
-                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+                Navigator.pushAndRemoveUntil(
+                  context, 
+                  MaterialPageRoute(builder: (_) => const LoginScreen()), 
+                  (route) => false
+                );
               }
             },
           ),
@@ -184,20 +163,47 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                 child: Column(
                   children: [
                     Container(
+                      width: 100,
+                      height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
+                        color: Colors.white,
                         border: Border.all(color: Colors.white, width: 4),
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10)],
                       ),
-                      child: CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Colors.white,
-                        backgroundImage: _imageFile != null
-                            ? FileImage(_imageFile!)
-                            : (fullImageUrl.isNotEmpty ? NetworkImage(fullImageUrl) as ImageProvider : null),
-                        child: _imageFile == null && fullImageUrl.isEmpty
-                            ? const Icon(Icons.person, size: 65, color: Color(0xFF1E3A8A))
-                            : null,
+                      child: ClipOval(
+                        child: fullImageUrl.isNotEmpty
+                            ? Image.network(
+                                fullImageUrl,
+                                fit: BoxFit.cover,
+                                width: 100,
+                                height: 100,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return const Center(
+                                    child: SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        color: Color(0xFF1E3A8A),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.person,
+                                    size: 65,
+                                    color: Color(0xFF1E3A8A),
+                                  );
+                                },
+                              )
+                            : const Icon(
+                                Icons.person,
+                                size: 65,
+                                color: Color(0xFF1E3A8A),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 15),
@@ -251,7 +257,7 @@ class _ProfileMenuScreenState extends State<ProfileMenuScreen> {
                     Center(
                       child: Column(
                         children: [
-                          Text('Jaya Sentosa Mobile', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black.withOpacity(0.3))),
+                          Text('Jaya Sentosa Wifian Solution Mobile', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black.withOpacity(0.3))),
                           Text('Versi ${Constants.version}', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.3))),
                         ],
                       ),

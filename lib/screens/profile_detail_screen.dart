@@ -59,7 +59,6 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       }
     });
 
-    _loadSavedImage();
     _fetchFreshProfile();
   }
 
@@ -80,7 +79,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
           String freshName = freshData['name'] ?? freshData['nama'] ?? _userName;
           String freshEmail = freshData['email'] ?? _userEmail;
           String freshPhone = freshData['phone'] ?? freshData['no_hp'] ?? _userPhone;
-          String freshFoto = freshData['foto_profil'] ?? freshData['foto'] ?? freshData['fotoProfile'] ?? '';
+          String freshFoto = freshData['foto_profile'] ?? '';
 
           await prefs.setString('cache_fullName', freshName);
           await prefs.setString('cache_email', freshEmail); 
@@ -93,32 +92,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
               _userEmail = freshEmail;
               _userPhone = freshPhone;
               _fotoUrl = freshFoto;
+              _imageFile = null;
             });
           }
         }
       }
     } catch (e) {
       print("Gagal mengambil profil detail terbaru: $e");
-    }
-  }
-
-  Future<void> _loadSavedImage() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String userId = prefs.getString('user_id') ?? '';
-    
-    String? savedPath = prefs.getString('profile_image_path_$userId');
-
-    if (savedPath != null && savedPath.isNotEmpty) {
-      File img = File(savedPath);
-      if (await img.exists()) {
-        setState(() {
-          _imageFile = img;
-        });
-      }
-    } else {
-      setState(() {
-        _imageFile = null;
-      });
     }
   }
 
@@ -130,13 +110,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   }
 
   Future<void> _deleteProfilePicture() async {
-    // Tampilkan Dialog Konfirmasi
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('Hapus Foto Profil', style: TextStyle(fontWeight: FontWeight.bold)),
+          // ✅ PERBAIKAN: Hilangkan kata "database"
           content: const Text('Apakah Anda yakin ingin menghapus foto profil ini?'),
           actions: [
             TextButton(
@@ -164,24 +144,38 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String userId = prefs.getString('user_id') ?? '';
 
-      if (userId.isNotEmpty) {
-        await prefs.remove('profile_image_path_$userId');
-      }
-      await prefs.setString('cache_fotoProfile', ''); 
+      bool success = await ApiService.deleteProfilePicture(userId);
 
-      if (mounted) {
-        setState(() {
-          _imageFile = null;
-          _fotoUrl = '';
-          _isUploading = false;
-        });
+      if (success) {
+        await prefs.setString('cache_fotoProfile', ''); 
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Foto profil berhasil dihapus!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (mounted) {
+          setState(() {
+            _imageFile = null;
+            _fotoUrl = '';
+            _isUploading = false;
+          });
+
+          // ✅ PERBAIKAN: Hilangkan kata "database"
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Foto profil berhasil dihapus!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isUploading = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal menghapus foto profil. Silakan coba lagi.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -216,7 +210,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                         _pickAndUploadImage(ImageSource.gallery);
                       },
                     ),
-                    if (_imageFile != null || _fotoUrl.isNotEmpty)
+                    if (_fotoUrl.isNotEmpty || _imageFile != null)
                       ListTile(
                         leading: const Icon(Icons.delete_outline_rounded, color: Colors.red),
                         title: const Text('Hapus Foto Profil', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red)),
@@ -251,18 +245,23 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       if (userId.isNotEmpty) {
         bool success = await ApiService.uploadProfilePicture(userId, _imageFile!);
 
+        if (success) {
+          await _fetchFreshProfile();
+        } else {
+          setState(() {
+            _imageFile = null;
+          });
+        }
+
         if (mounted) {
           setState(() {
             _isUploading = false;
           });
 
-          if (success) {
-            prefs.setString('profile_image_path_$userId', pickedFile.path);
-          }
-
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(success ? 'Foto profil berhasil diperbarui!' : 'Gagal mengupload foto.'),
+              // ✅ PERBAIKAN: Pesan lebih ramah pengguna
+              content: Text(success ? 'Foto profil berhasil diperbarui!' : 'Gagal mengupload foto. Silakan coba lagi.'),
               backgroundColor: success ? Colors.green : Colors.red,
             ),
           );
@@ -277,7 +276,9 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fullImageUrl = _fotoUrl.isNotEmpty ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl' : '';
+    final String fullImageUrl = _fotoUrl.isNotEmpty 
+        ? 'https://adminjsg.com/public/storage/profil/$_fotoUrl?v=${DateTime.now().millisecondsSinceEpoch}' 
+        : '';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -302,23 +303,43 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                   alignment: Alignment.bottomRight,
                   children: [
                     Container(
+                      width: 110,
+                      height: 110,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
+                        color: const Color(0xFFE2E8F0),
                         border: Border.all(color: Colors.white, width: 4),
                         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
                       ),
-                      child: CircleAvatar(
-                        radius: 55,
-                        backgroundColor: const Color(0xFFE2E8F0),
-                        backgroundImage: _imageFile != null
-                            ? FileImage(_imageFile!)
-                            : (fullImageUrl.isNotEmpty ? NetworkImage(fullImageUrl) as ImageProvider : null),
-                        child: _imageFile == null && fullImageUrl.isEmpty
-                            ? const Icon(Icons.person, size: 60, color: Color(0xFF1E3A8A))
-                            : null,
+                      child: ClipOval(
+                        child: _imageFile != null
+                            ? Image.file(_imageFile!, fit: BoxFit.cover, width: 110, height: 110)
+                            : (fullImageUrl.isNotEmpty
+                                ? Image.network(
+                                    fullImageUrl,
+                                    fit: BoxFit.cover,
+                                    width: 110,
+                                    height: 110,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return const Center(
+                                        child: SizedBox(
+                                          width: 30, height: 30,
+                                          child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF1E3A8A)),
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(Icons.person, size: 60, color: Color(0xFF1E3A8A));
+                                    },
+                                  )
+                                : const Icon(Icons.person, size: 60, color: Color(0xFF1E3A8A))),
                       ),
                     ),
-                    if (_isUploading) const Positioned.fill(child: CircularProgressIndicator(color: Color(0xFF1E3A8A))),
+                    if (_isUploading) 
+                      const Positioned.fill(
+                        child: Center(child: CircularProgressIndicator(color: Color(0xFF1E3A8A))),
+                      ),
                     if (!_isUploading)
                       Positioned(
                         bottom: 4,
@@ -330,7 +351,11 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                             onTap: _showImageSourceMenu,
                             child: Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: const Color(0xFF1E3A8A), shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1E3A8A), 
+                                shape: BoxShape.circle, 
+                                border: Border.all(color: Colors.white, width: 2)
+                              ),
                               child: const Icon(Icons.camera_alt_rounded, size: 20, color: Colors.white),
                             ),
                           ),
@@ -395,7 +420,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 ),
                 const SizedBox(height: 24),
                 Center(
-                  child: Text('Versi ${Constants.version} · Jaya Sentosa Mobile', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4))),
+                  child: Text('Versi ${Constants.version} · Jaya Sentosa Wifian Solution Mobile', style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.4))),
                 ),
               ],
             ),

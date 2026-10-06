@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart'; // Tambahan wajib untuk membuka WhatsApp
+import 'package:url_launcher/url_launcher.dart';
 
 import 'tagihan_screen.dart';
 import '../utils/constants.dart';
@@ -20,8 +20,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  static const Color _brandBlue = Color(0xFF1E3A8A);
+
   Future<void> _launchWhatsAppSupport() async {
-    const String phoneNumber = "6285165863800"; // Nomor WhatsApp Admin JSG
+    const String phoneNumber = "6285165863800";
     const String message = "Halo Admin Jaya Sentosa Group, saya butuh bantuan untuk login ke aplikasi Jaya Sentosa Mobile.";
 
     final Uri whatsappUrl = Uri.parse("whatsapp://send?phone=$phoneNumber&text=${Uri.encodeComponent(message)}");
@@ -103,222 +105,229 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ⭐ ATUR DI SINI: Semakin besar nilainya, semakin BESAR logo tampil di layar
+    // - logoFullSize  : ukuran render gambar (makin besar makin jelas tapi potong padding lebih banyak)
+    // - logoVisible   : tinggi area yang "terlihat" saja
+    const double logoFullSize = 220;
+    const double logoVisible = 160;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1E3A8A),
-              Color(0xFF3B82F6),
-            ], 
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 20.0,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.15), 
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 2,
+      backgroundColor: _brandBlue,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ============================================================
+                // LOGO BESAR + dipotong padding bawahnya
+                // ============================================================
+                SizedBox(
+                  width: logoFullSize,
+                  height: logoVisible,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      maxHeight: logoFullSize,
+                      child: ColorFiltered(
+                        colorFilter: const ColorFilter.mode(
+                          _brandBlue,
+                          BlendMode.lighten,
+                        ),
+                        child: Image.asset(
+                          'assets/icon.png',
+                          width: logoFullSize,
+                          height: logoFullSize,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.wifi_rounded,
+                              size: 80,
+                              color: Colors.white,
+                            );
+                          },
+                        ),
                       ),
                     ),
-                    child: const Icon(
-                      Icons.wifi_rounded,
-                      size: 60,
-                      color: Colors.white,
-                    ),
                   ),
-                  const SizedBox(height: 24),
+                ),
 
-                  const Text(
-                    'Jaya Sentosa Mobile',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 0.5,
-                    ),
-                    textAlign: TextAlign.center,
+                // ⭐ PERUBAHAN: Jarak langsung 0 supaya teks menempel ke logo
+                const SizedBox(height: 0),
+
+                // Nama brand
+                const Text(
+                  'JAYA SENTOSA',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3.0,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Solusi Pembayaran WiFi Desa JSG',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                    textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  'Wifian Solution Mobile',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.5,
                   ),
+                ),
 
-                  const SizedBox(height: 40),
+                const SizedBox(height: 28),
 
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                // ============================================================
+                // CARD FORM LOGIN
+                // ============================================================
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Center(
+                        child: Text(
+                          'Selamat Datang',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: _brandBlue,
+                          ),
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Center(
-                          child: Text(
-                            'Selamat Datang',
+                      ),
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          'Silakan masuk untuk melanjutkan',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      _buildTextField(
+                        controller: _nikController,
+                        label: 'NIK',
+                        hint: 'Masukkan NIK Anda',
+                        icon: Icons.badge_outlined,
+                      ),
+                      const SizedBox(height: 16),
+
+                      _buildTextField(
+                        controller: _passwordController,
+                        label: 'Kata Sandi',
+                        hint: 'Masukkan Kata Sandi',
+                        icon: Icons.lock_outline_rounded,
+                        isPassword: true,
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _launchWhatsAppSupport,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Lupa Kata Sandi?',
                             style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E3A8A),
+                              color: _brandBlue,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        _buildTextField(
-                          controller: _nikController,
-                          label: 'NIK',
-                          hint: 'Masukkan NIK Anda',
-                          icon: Icons.badge,
-                        ),
-                        const SizedBox(height: 16),
-                        
-                        _buildTextField(
-                          controller: _passwordController,
-                          label: 'Kata Sandi',
-                          hint: 'Masukkan Kata Sandi', 
-                          icon: Icons.lock_outline,
-                          isPassword: true, 
-                        ),
-
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _launchWhatsAppSupport,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Lupa Kata Sandi?',
-                              style: TextStyle(
-                                color: Color(0xFF3B82F6),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Tombol Masuk
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _doLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E3A8A),
-                              foregroundColor: Colors.white, 
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              elevation: 4,
-                              shadowColor: const Color(0xFF1E3A8A).withOpacity(0.5),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                    ),
-                                  )
-                                : const Text(
-                                    'MASUK',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.5,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  Text(
-                    'Butuh bantuan? Hubungi kami',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.8),
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: _launchWhatsAppSupport,
-                      borderRadius: BorderRadius.circular(30),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.support_agent_rounded, color: Colors.white, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              Constants.supportPhone,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
                         ),
                       ),
+
+                      const SizedBox(height: 20),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _doLogin,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _brandBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  height: 20, width: 20,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                )
+                              : const Text(
+                                  'MASUK',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2.0,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ============================================================
+                // FOOTER BANTUAN
+                // ============================================================
+                Text(
+                  'Butuh bantuan? Hubungi kami',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton.icon(
+                  onPressed: _launchWhatsAppSupport,
+                  icon: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 16),
+                  label: Text(
+                    Constants.supportPhone,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: Colors.white.withOpacity(0.4), width: 1),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -341,7 +350,7 @@ class _LoginScreenState extends State<LoginScreen> {
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.bold,
-            color: Colors.black54,
+            color: Colors.black87,
           ),
         ),
         const SizedBox(height: 8),
@@ -352,7 +361,7 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
-            prefixIcon: Icon(icon, color: const Color(0xFF1E3A8A), size: 20),
+            prefixIcon: Icon(icon, color: _brandBlue, size: 20),
             suffixIcon: isPassword
                 ? IconButton(
                     icon: Icon(
@@ -362,23 +371,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Colors.grey.shade500,
                       size: 20,
                     ),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   )
                 : null,
             filled: true,
-            fillColor: const Color(0xFFF8FAFC), 
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
+            fillColor: const Color(0xFFF8FAFC),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFF1E3A8A), width: 2),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _brandBlue, width: 1.5),
             ),
           ),
         ),

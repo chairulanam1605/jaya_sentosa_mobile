@@ -41,19 +41,19 @@ class _TagihanScreenState extends State<TagihanScreen> {
 
   Future<void> _loadUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    final user = AuthService.currentUser;
 
-    String? cachedName = prefs.getString('cache_fullName');
-
-    if (cachedName == null) {
-      final user = AuthService.currentUser;
-      if (user != null) {
-        await prefs.setString('cache_fullName', user.fullName);
-        await prefs.setString('cache_packageName', user.packageName);
-        await prefs.setString('cache_customerNumber', user.customerNumber ?? '-');
-        await prefs.setString('cache_phone', user.phone);
-        await prefs.setString('cache_masaAktif', user.masaAktif.toIso8601String());
-        await prefs.setString('cache_statusLayanan', 'aktif');
-      }
+    // ============================================================
+    // ⭐ SELALU TIMPA CACHE DENGAN DATA DARI AUTHSERVICE
+    // Data ini fresh dari login, jadi badge langsung akurat
+    // ============================================================
+    if (user != null) {
+      await prefs.setString('cache_fullName', user.fullName);
+      await prefs.setString('cache_packageName', user.packageName);
+      await prefs.setString('cache_customerNumber', user.customerNumber ?? '-');
+      await prefs.setString('cache_phone', user.phone);
+      await prefs.setString('cache_masaAktif', user.masaAktif.toIso8601String());
+      await prefs.setString('cache_statusLayanan', user.statusLayanan); // ⭐ INI KUNCI
     }
 
     setState(() {
@@ -74,6 +74,9 @@ class _TagihanScreenState extends State<TagihanScreen> {
       _checkUnreadNotifications();
       String? token = await FirebaseMessaging.instance.getToken();
       if (token != null) ApiService.updateFcmToken(currentUserId, token);
+      
+      // Fetch background untuk memastikan data tetap akurat
+      _fetchFreshProfile();
     }
   }
 
@@ -104,6 +107,17 @@ class _TagihanScreenState extends State<TagihanScreen> {
           if (freshMasaAktifStr != null && freshMasaAktifStr.isNotEmpty) {
             DateTime parsedDate = DateTime.parse(freshMasaAktifStr);
             await prefs.setString('cache_masaAktif', parsedDate.toIso8601String());
+          }
+
+          if (mounted) {
+            setState(() {
+              _userName = freshName;
+              _userPackage = freshPackage;
+              _userStatusLayanan = freshStatus;
+              if (freshMasaAktifStr != null && freshMasaAktifStr.isNotEmpty) {
+                _userMasaAktif = DateTime.parse(freshMasaAktifStr);
+              }
+            });
           }
         }
       }

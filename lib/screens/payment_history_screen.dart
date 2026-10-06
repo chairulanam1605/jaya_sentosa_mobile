@@ -88,7 +88,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.only(top: 100.0),
-                      child: Text('Terjadi kesalahan koneksi database: ${snapshot.error}'),
+                      // ✅ PERBAIKAN: Hilangkan kata "database"
+                      child: const Text('Terjadi kesalahan saat memuat data. Silakan coba lagi.'),
                     ),
                   );
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {

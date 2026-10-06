@@ -9,6 +9,9 @@ class AuthService {
   static Future<void> logout() async {
     currentUser = null; 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_id'); // Hapus ID dari penyimpanan HP
+    // ======================================================
+    // PERBAIKAN: Hapus SEMUA data cache, bukan hanya user_id
+    // ======================================================
+    await prefs.clear(); 
   }
 }

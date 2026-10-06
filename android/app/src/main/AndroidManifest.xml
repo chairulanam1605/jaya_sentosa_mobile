@@ -10,7 +10,7 @@
         </intent>
     </queries>
     <application
-        android:label="JSG WIFI MOBILE"
+        android:label="Jaya Sentosa Wifian Solution Mobile"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity

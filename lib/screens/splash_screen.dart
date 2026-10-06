@@ -22,7 +22,6 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 2));
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
-
     String? userId = prefs.getString('user_id');
 
     if (mounted) {
@@ -42,24 +41,90 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const Color backgroundColor = Color(0xFF1E3A8A);
+
+    // ⭐ UBAH ANGKA INI untuk mengatur seberapa banyak padding bawah dipotong
+    const double logoVisibleHeight = 110;
+    const double logoFullSize = 160;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1E3A8A),
+      backgroundColor: backgroundColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.wifi, size: 80, color: Colors.white),
-            SizedBox(height: 20),
-            Text(
-              'Jaya Sentosa Mobile',
+          children: [
+            // ============================================================
+            // LOGO — dipotong bagian bawahnya dengan ClipRect + OverflowBox
+            // ============================================================
+            SizedBox(
+              width: logoFullSize,
+              height: logoVisibleHeight,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.topCenter,
+                  maxHeight: logoFullSize,
+                  child: ColorFiltered(
+                    colorFilter: const ColorFilter.mode(
+                      backgroundColor,
+                      BlendMode.lighten,
+                    ),
+                    child: Image.asset(
+                      'assets/icon.png',
+                      width: logoFullSize,
+                      height: logoFullSize,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.wifi_rounded,
+                          size: 80,
+                          color: Colors.white,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ⭐ PERUBAHAN: Jarak dari 4 → 12 (turunkan teks sedikit)
+            const SizedBox(height: 12),
+
+            // Nama Brand Utama
+            const Text(
+              'JAYA SENTOSA',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2.0,
               ),
             ),
-            SizedBox(height: 40),
-            CircularProgressIndicator(color: Colors.white),
+
+            const SizedBox(height: 4),
+
+            // Sub-brand
+            const Text(
+              'Wifian Solution Mobile',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.5,
+              ),
+            ),
+
+            const SizedBox(height: 40),
+
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
+            ),
           ],
         ),
       ),

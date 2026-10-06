@@ -9,20 +9,16 @@ import 'auth_service.dart';
 class ApiService {
   static const String baseUrl = "https://adminjsg.com/api"; 
 
-  // Ambil Tagihan Belum Dibayar
   static Future<List<InvoiceModel>> fetchUnpaidInvoices(String pelangganId) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/tagihan/unpaid/$pelangganId'),
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: {'Accept': 'application/json'},
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
         final List<dynamic> dataList = jsonResponse['data'];
-
         return dataList.map((data) => InvoiceModel.fromJson(data)).toList();
       } else {
         throw Exception('Gagal memuat tagihan');
@@ -32,20 +28,16 @@ class ApiService {
     }
   }
 
-  // Ambil Riwayat Pembayaran (Lunas)
   static Future<List<InvoiceModel>> fetchPaidInvoices(String pelangganId) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/tagihan/paid/$pelangganId'),
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: {'Accept': 'application/json'},
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
         final List<dynamic> dataList = jsonResponse['data'];
-
         return dataList.map((data) => InvoiceModel.fromJson(data)).toList();
       } else {
         throw Exception('Gagal memuat riwayat');
@@ -55,33 +47,49 @@ class ApiService {
     }
   }
 
-  // Proses Login dan Sinkronisasi Data
+  // ============================================================
+  // LOGIN — Sekarang simpan SEMUA data ke cache
+  // ============================================================
   static Future<bool> login(String nik, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/login'), 
-        headers: {
-          'Accept': 'application/json',
-        },
-        body: {
-          'nik': nik,
-          'password': password,
-        },
+        headers: {'Accept': 'application/json'},
+        body: {'nik': nik, 'password': password},
       );
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> jsonResponse = json.decode(response.body);
         final userData = jsonResponse['data'];
         
-        // KUNCI PERBAIKAN: Tangkap pelanggan_id dari server, BUKAN id dari tabel users
         final String userId = userData['pelanggan_id'].toString();
 
-        // Simpan ID yang benar ke penyimpanan lokal HP (SharedPreferences)
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_id', userId);
+        // Buat UserModel dari response
+        final userModel = UserModel.fromJson(userData);
 
-        // Masukkan data ke AuthService agar halaman profil bisa langsung menampilkan data
-        AuthService.currentUser = UserModel.fromJson(userData);
+        // Bersihkan cache lama
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.clear(); 
+
+        // ============================================================
+        // ⭐ SIMPAN SEMUA DATA KE CACHE (langsung dari response login)
+        // Ini memastikan TagihanScreen langsung menampilkan data yang benar
+        // tanpa perlu menunggu _fetchFreshProfile() selesai
+        // ============================================================
+        await prefs.setString('user_id', userId);
+        await prefs.setBool('is_logged_in', true);
+        await prefs.setString('cache_fullName', userModel.fullName);
+        await prefs.setString('cache_packageName', userModel.packageName);
+        await prefs.setString('cache_customerNumber', userModel.customerNumber);
+        await prefs.setString('cache_phone', userModel.phone);
+        await prefs.setString('cache_email', userModel.email);
+        await prefs.setString('cache_masaAktif', userModel.masaAktif.toIso8601String());
+        await prefs.setString('cache_statusLayanan', userModel.statusLayanan);
+        if (userModel.fotoProfile != null) {
+          await prefs.setString('cache_fotoProfile', userModel.fotoProfile!);
+        }
+
+        AuthService.currentUser = userModel;
 
         return true;
       } else {
@@ -92,21 +100,12 @@ class ApiService {
     }
   }
 
-  // FUNGSI UNTUK UPDATE PROFIL KE DATABASE
   static Future<bool> updateProfile(String nik, String nama, String email, String phone) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/update-profile'),
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'nik': nik,
-          'nama': nama,
-          'email': email,
-          'no_telepon': phone,
-        }),
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        body: jsonEncode({'nik': nik, 'nama': nama, 'email': email, 'no_telepon': phone}),
       );
 
       if (response.statusCode == 200) {
@@ -120,30 +119,24 @@ class ApiService {
     }
   }
 
-  // 1. Fungsi Mengirim Token Firebase ke Database Laravel
   static Future<void> updateFcmToken(String userId, String token) async {
     try {
       await http.post(
         Uri.parse('$baseUrl/update-fcm-token'),
         headers: {'Accept': 'application/json'},
-        body: {
-          'pelanggan_id': userId,
-          'fcm_token': token,
-        },
+        body: {'pelanggan_id': userId, 'fcm_token': token},
       );
-      print("FCM Token berhasil dikirim ke server");
     } catch (e) {
       print("Gagal mengirim FCM Token: $e");
     }
   }
 
-  // 2. Fungsi Mengambil Daftar Notifikasi dari Laravel
   static Future<List<dynamic>> fetchNotifikasi(String userId) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/notifikasi/$userId'));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return data['data']; // Mengambil array data notifikasi
+        return data['data'];
       }
       return [];
     } catch (e) {
@@ -152,9 +145,6 @@ class ApiService {
     }
   }
 
-  // =========================================================
-  // PERBAIKAN: Fungsi Pelapor Status Baca Notifikasi
-  // =========================================================
   static Future<void> markNotifikasiAsRead(String notifId) async {
     try {
       final url = Uri.parse('$baseUrl/notifikasi/read/$notifId');
@@ -164,24 +154,13 @@ class ApiService {
     }
   }
 
-  // Fungsi Mengupload Foto Profil ke Laravel (Multipart Request)
   static Future<bool> uploadProfilePicture(String userId, File imageFile) async {
     try {
       final url = Uri.parse('$baseUrl/update-foto-profil');
-      
-      // Menggunakan MultipartRequest khusus untuk mengirim file fisik
       var request = http.MultipartRequest('POST', url);
-      
-      // Mengirim ID pelanggan
       request.fields['pelanggan_id'] = userId;
-      
-      // Membungkus file gambar
-      request.files.add(await http.MultipartFile.fromPath(
-        'foto', 
-        imageFile.path,
-      ));
+      request.files.add(await http.MultipartFile.fromPath('foto', imageFile.path));
 
-      // Kirim ke server
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
@@ -193,6 +172,26 @@ class ApiService {
       }
     } catch (e) {
       print("Error upload foto: $e");
+      return false;
+    }
+  }
+
+  static Future<bool> deleteProfilePicture(String userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/delete-foto-profil'),
+        headers: {'Accept': 'application/json'},
+        body: {'pelanggan_id': userId},
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return jsonResponse['status'] == 'success';
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print("Error delete foto profil: $e");
       return false;
     }
   }

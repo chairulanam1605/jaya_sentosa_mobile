@@ -8,6 +8,7 @@ class UserModel {
   final DateTime since;
   final DateTime masaAktif;
   final String? fotoProfile;
+  final String statusLayanan; 
 
   UserModel({
     required this.id,
@@ -19,6 +20,7 @@ class UserModel {
     required this.since,
     required this.masaAktif,
     required this.fotoProfile,
+    this.statusLayanan = 'aktif', 
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -43,6 +45,8 @@ class UserModel {
           : DateTime.now().add(const Duration(days: 30)),
 
       fotoProfile: json['foto_profile'],
+      
+      statusLayanan: pelangganData['status_layanan'] ?? 'aktif',
     );
   }
 }

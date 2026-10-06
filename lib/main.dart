@@ -55,7 +55,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Jaya Sentosa Mobile',
+      title: 'Jaya Sentosa Wifian Solution Mobile',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E3A8A)),
         fontFamily: 'Roboto',

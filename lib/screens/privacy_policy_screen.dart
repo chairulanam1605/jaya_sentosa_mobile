@@ -22,7 +22,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Privacy Policy Jaya Sentosa Mobile',
+              'Privacy Policy Jaya Sentosa Wifian Solution Mobile',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
@@ -40,7 +40,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             _buildBodyText(
-              'Terima kasih telah menggunakan aplikasi Jaya Sentosa Mobile. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi Anda saat menggunakan aplikasi layanan WiFi dari Jaya Sentosa Group (JSG).',
+              'Terima kasih telah menggunakan aplikasi Jaya Sentosa Wifian Solution Mobile. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi Anda saat menggunakan aplikasi layanan WiFi dari Jaya Sentosa Group (JSG).',
             ),
             
             _buildSectionTitle('1. Informasi yang Kami Kumpulkan'),
